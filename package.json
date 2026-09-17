@@ -7,7 +7,7 @@
     "start": "node server.js",
     "dev": "node --watch server.js"
   },
-  "dependencies": {
+  "devDependencies": {
     "express": "^4.19.2"
   }
 }
