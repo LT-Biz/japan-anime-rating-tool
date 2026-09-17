@@ -1,0 +1,676 @@
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: -apple-system, "Segoe UI", "Malgun Gothic", sans-serif;
+  background-color: #f5f6f8;
+  color: #222;
+}
+
+.app-header {
+  background-color: #2b2f77;
+  color: #fff;
+  padding: 20px 24px;
+}
+
+.app-header h1 {
+  margin: 0;
+  font-size: 20px;
+}
+
+.container {
+  width: 100%;
+  margin: 0;
+  padding: 16px;
+}
+
+.date-panel {
+  background: #fff;
+  border-radius: 8px;
+  padding: 16px 20px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+  margin-bottom: 20px;
+}
+
+.date-panel label {
+  display: block;
+  font-size: 13px;
+  color: #666;
+  margin-bottom: 8px;
+}
+
+.date-controls {
+  display: flex;
+  gap: 8px;
+}
+
+.date-panel input[type="date"] {
+  font-size: 15px;
+  padding: 8px 10px;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+}
+
+.date-panel button {
+  font-size: 14px;
+  font-weight: 600;
+  padding: 8px 18px;
+  border: none;
+  border-radius: 6px;
+  background-color: #2b2f77;
+  color: #fff;
+  cursor: pointer;
+}
+
+.date-panel button:hover {
+  background-color: #3b4099;
+}
+
+.period-display {
+  margin: 12px 0 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: #2b2f77;
+}
+
+.source-panel {
+  background: #fff;
+  border-radius: 8px;
+  padding: 16px 20px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+  margin-bottom: 20px;
+}
+
+.source-panel-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 14px;
+  font-weight: 700;
+  color: #2b2f77;
+  margin-bottom: 10px;
+}
+
+.source-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.source-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  padding: 8px 16px;
+  border: 1px solid #ddd;
+  border-radius: 20px;
+  background: #fff;
+  color: #555;
+  cursor: pointer;
+}
+
+.source-btn:hover {
+  border-color: #2b2f77;
+  color: #2b2f77;
+}
+
+.source-btn.active {
+  border-color: #2b2f77;
+  background: #2b2f77;
+  color: #fff;
+}
+
+.source-btn-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  background-color: #ccc;
+}
+
+.source-btn-dot-ok {
+  background-color: #3ddc73;
+}
+
+.source-btn-dot-fail {
+  background-color: #ff6b57;
+}
+
+.loading-indicator {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: #fff;
+  border-radius: 8px;
+  padding: 14px 20px;
+  margin-bottom: 20px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+  font-size: 14px;
+  color: #555;
+}
+
+.spinner {
+  width: 16px;
+  height: 16px;
+  border: 3px solid #e6e7ee;
+  border-top-color: #2b2f77;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.hidden {
+  display: none;
+}
+
+.tabs {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 16px;
+}
+
+.tab-btn {
+  flex: 1;
+  padding: 12px 0;
+  border: none;
+  background: #e6e7ee;
+  color: #555;
+  font-size: 14px;
+  font-weight: 600;
+  border-radius: 8px 8px 0 0;
+  cursor: pointer;
+}
+
+.tab-btn.active {
+  background: #fff;
+  color: #2b2f77;
+}
+
+.tab-panel {
+  display: none;
+  background: #fff;
+  border-radius: 0 0 8px 8px;
+  padding: 16px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+}
+
+.tab-panel.active {
+  display: block;
+}
+
+.tab-panel h2 {
+  margin-top: 0;
+  font-size: 16px;
+  color: #333;
+}
+
+.section-hint {
+  margin: -4px 0 16px;
+  font-size: 12px;
+  color: #888;
+  line-height: 1.5;
+}
+
+.sort-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 20px;
+  font-size: 13px;
+  color: #555;
+}
+
+.sort-toolbar select {
+  font-size: 13px;
+  padding: 6px 10px;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  background: #fff;
+}
+
+.sort-toolbar button {
+  font-size: 13px;
+  font-weight: 600;
+  padding: 6px 14px;
+  border: 1px solid #2b2f77;
+  border-radius: 6px;
+  background: #fff;
+  color: #2b2f77;
+  cursor: pointer;
+}
+
+.sort-toolbar button:hover {
+  background: #2b2f77;
+  color: #fff;
+}
+
+.day-block {
+  margin-bottom: 28px;
+}
+
+.day-block:last-child {
+  margin-bottom: 0;
+}
+
+.day-block-title {
+  margin: 0 0 10px;
+  font-size: 14px;
+  font-weight: 700;
+  color: #2b2f77;
+  padding-bottom: 6px;
+  border-bottom: 2px solid #2b2f77;
+}
+
+.day-block-empty {
+  color: #999;
+  font-size: 13px;
+  padding: 12px 0;
+}
+
+.table-wrapper {
+  overflow-x: auto;
+}
+
+.data-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+
+.data-table th,
+.data-table td {
+  padding: 10px 8px;
+  text-align: left;
+  border-bottom: 1px solid #eee;
+  white-space: nowrap;
+}
+
+.data-table th {
+  color: #666;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.sortable-header {
+  cursor: pointer;
+  user-select: none;
+}
+
+.sortable-header:hover {
+  color: #2b2f77;
+}
+
+.data-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.data-table a {
+  color: #2b2f77;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.data-table a:hover {
+  text-decoration: underline;
+}
+
+.badge {
+  display: inline-block;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 10px;
+}
+
+.badge-late-night {
+  background-color: #2b2f77;
+  color: #fff;
+}
+
+.source-status {
+  display: inline-block;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 3px 10px;
+  border-radius: 10px;
+  vertical-align: middle;
+}
+
+.source-status-live {
+  background-color: #e3f7e8;
+  color: #1f8a3b;
+}
+
+.source-status-mock {
+  background-color: #fdeeea;
+  color: #c23b22;
+}
+
+.source-status-error {
+  background-color: #fdeeea;
+  color: #c23b22;
+}
+
+.info-wrapper {
+  position: relative;
+  display: inline-block;
+  vertical-align: middle;
+}
+
+.info-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: 1px solid #bbb;
+  background: #fff;
+  color: #777;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0;
+}
+
+.info-btn:hover {
+  border-color: #2b2f77;
+  color: #2b2f77;
+}
+
+.info-popup {
+  position: absolute;
+  top: 24px;
+  left: 0;
+  z-index: 10;
+  width: 320px;
+  background: #fff;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
+  padding: 12px 14px;
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 1.6;
+  color: #555;
+}
+
+.empty-message {
+  color: #999;
+  font-size: 13px;
+  text-align: center;
+  padding: 24px 0;
+}
+
+.search-controls {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 20px;
+}
+
+.search-controls input[type="text"] {
+  flex: 1;
+  font-size: 14px;
+  padding: 8px 12px;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+}
+
+.search-controls button {
+  font-size: 14px;
+  font-weight: 600;
+  padding: 8px 18px;
+  border: none;
+  border-radius: 6px;
+  background-color: #2b2f77;
+  color: #fff;
+  cursor: pointer;
+}
+
+.search-controls button:hover {
+  background-color: #3b4099;
+}
+
+.anime-card {
+  background: #fafbfc;
+  border: 1px solid #eee;
+  border-radius: 8px;
+  padding: 16px 20px;
+  margin-bottom: 16px;
+}
+
+.anime-card:last-child {
+  margin-bottom: 0;
+}
+
+.anime-card-header {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+}
+
+.anime-card-header h3 {
+  margin: 0;
+  font-size: 16px;
+  color: #222;
+}
+
+.anime-card-subtitle {
+  margin: 4px 0 14px;
+  font-size: 13px;
+  color: #777;
+}
+
+.anime-card-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 12px 20px;
+  margin: 0;
+}
+
+.anime-card-field dt {
+  font-size: 11px;
+  color: #999;
+  margin-bottom: 2px;
+}
+
+.anime-card-field dd {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: #222;
+}
+
+.anime-card-field dd a {
+  color: #2b2f77;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.anime-card-field dd a:hover {
+  text-decoration: underline;
+}
+
+.cover-thumb {
+  display: block;
+  width: 40px;
+  height: 56px;
+  object-fit: cover;
+  border-radius: 4px;
+  cursor: zoom-in;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+}
+
+.cover-thumb-card {
+  width: 64px;
+  height: 90px;
+  flex-shrink: 0;
+}
+
+.image-modal {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.75);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 32px;
+  cursor: zoom-out;
+  z-index: 100;
+}
+
+/* .hidden{display:none}과 이 규칙은 둘 다 클래스 선택자 하나짜리라 명시도가 같아,
+   스타일시트에 나중에 나오는 쪽(.image-modal)이 이겨버려 hidden 클래스를 붙여도
+   감춰지지 않는 문제가 있었다. 두 클래스를 모두 요구하는 규칙으로 명시도를 높여
+   hidden이 항상 이기도록 고정한다. */
+.image-modal.hidden {
+  display: none;
+}
+
+.image-modal img {
+  max-width: min(90vw, 600px);
+  max-height: 90vh;
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+}
+
+/* 타이틀이 길어도 표 전체가 넓어지지 않도록, 칸은 고정 폭을 유지하고 넘치는
+   내용은 잘라서 보여준다(getTitleColumnWidth 참고). 스크롤바는 화면에 노출하지
+   않지만(scrollbar-width/::-webkit-scrollbar), overflow-x:auto 자체는 유지해
+   텍스트를 드래그로 선택할 때 브라우저가 자동으로 옆으로 스크롤해주는 것까지는
+   막지 않는다(복사 등으로 전체 내용에 접근할 수 있는 유일한 경로). */
+.title-scroll {
+  display: block;
+  overflow-x: auto;
+  white-space: nowrap;
+  max-width: 100%;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.title-scroll::-webkit-scrollbar {
+  display: none;
+}
+
+/* 표에 좌우 스크롤이 생겨도 No./표지/타이틀(일본어) 세 칸은 화면에 고정해두고
+   나머지 칸만 그 뒤로 스크롤되게 한다(app.js의 applyStickyColumns가 left 값을
+   칸마다 계산해 인라인으로 넣어준다). .table-wrapper의 overflow-x:auto가 이
+   position:sticky의 기준 스크롤 컨테이너가 된다. */
+.sticky-col {
+  position: sticky;
+  z-index: 2;
+  background: #fff;
+}
+
+.data-table thead .sticky-col {
+  z-index: 3;
+}
+
+.sticky-col-last {
+  box-shadow: 2px 0 4px rgba(0, 0, 0, 0.08);
+}
+
+.tag-expand-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 1px 7px;
+  border: 1px solid #2b2f77;
+  border-radius: 10px;
+  background: #fff;
+  color: #2b2f77;
+  cursor: pointer;
+  line-height: 1.6;
+}
+
+.tag-expand-btn:hover {
+  background: #2b2f77;
+  color: #fff;
+}
+
+.tag-list-modal {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  z-index: 100;
+}
+
+/* .hidden{display:none}과 명시도가 같아 나중에 나오는 이 규칙이 이겨버리는
+   문제(.image-modal에서 겪은 것과 동일)를 막기 위한 override. */
+.tag-list-modal.hidden {
+  display: none;
+}
+
+.tag-list-modal-content {
+  position: relative;
+  background: #fff;
+  border-radius: 10px;
+  padding: 24px 28px;
+  max-width: 480px;
+  width: 100%;
+  max-height: 70vh;
+  overflow-y: auto;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+}
+
+.tag-list-close-btn {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: none;
+  background: #f0f0f0;
+  color: #555;
+  font-size: 16px;
+  cursor: pointer;
+  line-height: 1;
+}
+
+.tag-list-close-btn:hover {
+  background: #e0e0e0;
+}
+
+.tag-list-modal-title {
+  margin: 0 24px 16px 0;
+  font-size: 15px;
+  color: #222;
+}
+
+.tag-list-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.tag-chip {
+  display: inline-block;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 4px 10px;
+  border-radius: 12px;
+  background: #eef0fb;
+  color: #2b2f77;
+}
+
+.tag-chip-theme {
+  background: #f3f3f3;
+  color: #666;
+}

@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>일본 애니메이션 방영 정보</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <header class="app-header">
+    <h1>일본 애니메이션 방영 정보</h1>
+  </header>
+
+  <main class="container">
+    <section class="date-panel">
+      <label for="baseDate">기준 날짜 선택</label>
+      <div class="date-controls">
+        <input type="date" id="baseDate" />
+        <button id="searchBtn" type="button">조회</button>
+      </div>
+      <p id="periodDisplay" class="period-display"></p>
+    </section>
+
+    <section class="source-panel">
+      <div class="source-panel-header">
+        <span>데이터 소스</span>
+        <span class="info-wrapper">
+          <button id="sourceInfoBtn" class="info-btn" type="button" aria-label="안내 보기">?</button>
+          <div id="sourceInfoPopup" class="info-popup hidden">
+            화면에 표시할 데이터 소스를 직접 선택할 수 있습니다(기본값: AniList API).<br /><br />
+            버튼 옆 점은 페이지 진입 시 각 API에 1회씩 보낸 상태 확인 결과입니다(초록: 정상
+            응답, 빨강: 실패).<br /><br />
+            선택한 API 호출이 실패하면 예시(Mock) 데이터로 자동 대체됩니다.
+          </div>
+        </span>
+      </div>
+      <div class="source-buttons">
+        <button class="source-btn active" data-source="anilist" type="button">
+          <span id="anilistStatusDot" class="source-btn-dot"></span>
+          AniList API
+        </button>
+        <button class="source-btn" data-source="kitsu" type="button">
+          <span id="kitsuStatusDot" class="source-btn-dot"></span>
+          Kitsu API
+        </button>
+        <button class="source-btn" data-source="jikan" type="button">
+          <span id="jikanStatusDot" class="source-btn-dot"></span>
+          Jikan API
+        </button>
+      </div>
+    </section>
+
+    <div id="loadingIndicator" class="loading-indicator hidden">
+      <span class="spinner"></span>
+      <span>데이터를 불러오는 중...</span>
+    </div>
+
+    <nav class="tabs">
+      <button class="tab-btn active" data-tab="rating">요일별 방영 애니메이션</button>
+      <button class="tab-btn" data-tab="new">분기 신작 애니메이션</button>
+      <button class="tab-btn" data-tab="search">애니메이션 검색</button>
+    </nav>
+
+    <section id="rating" class="tab-panel active">
+      <h2>
+        요일별 방영 애니메이션
+        <span id="ratingSourceStatus" class="source-status hidden"></span>
+        <span class="info-wrapper">
+          <button id="ratingInfoBtn" class="info-btn" type="button" aria-label="안내 보기">?</button>
+          <div id="ratingInfoPopup" class="info-popup hidden">
+            실시간 TV 시청률은 공개 데이터가 없어, 선택한 API(AniList/Kitsu/Jikan)가 제공하는
+            평점 · 참여자 수 · 인기도 순위 · 즐겨찾기 수를 기준으로 표시합니다.<br /><br />
+            심야(0~5시대) 방영작은 방송 업계 관례에 따라 전날 요일에 표시됩니다.<br /><br />
+            아래 정렬 기준으로 모든 요일 표를 한번에 재정렬할 수 있습니다.<br /><br />
+            원피스 · 블리치처럼 방영을 시작한 지 매우 오래된 초장기 연재작은 목록에서 제외될 수
+            있습니다.<br /><br />
+            AniList는 인기도 순위를 직접 제공하지 않아, 지금 가져온 목록 안에서 인기순으로
+            매긴 임시 순번(근사치)입니다.<br /><br />
+            Kitsu API를 선택한 경우, 방영 요일·시간 정보가 상시 연재작 위주로만 있어 상당수
+            작품이 "방송 요일 정보 없음"으로 표시될 수 있습니다.<br /><br />
+            선택한 API 호출이 실패하면 예시(Mock) 데이터로 자동 대체되며, 제목 옆 배지로
+            실시간/예시 여부를 확인할 수 있습니다.
+          </div>
+        </span>
+      </h2>
+      <div class="sort-toolbar">
+        <label for="sortFieldSelect">정렬 기준</label>
+        <select id="sortFieldSelect">
+          <option value="popularityRank">인기도 순위</option>
+          <option value="score">평점</option>
+          <option value="scoredBy">평가 참여자 수</option>
+          <option value="favorites">즐겨찾기 수</option>
+        </select>
+        <button id="sortDirectionBtn" type="button"></button>
+      </div>
+      <div id="ratingDaysContainer"></div>
+      <p id="ratingEmptyMessage" class="empty-message hidden">데이터가 없습니다.</p>
+    </section>
+
+    <section id="new" class="tab-panel">
+      <h2>분기 신작 애니메이션 <span id="newSourceStatus" class="source-status hidden"></span></h2>
+      <p class="section-hint">
+        기준 날짜가 속한 분기(계절)에 방영 중인 TV 애니메이션 전체를 보여줍니다. 반드시
+        이번 주에 새로 시작한 작품만 나오는 것은 아니며, 같은 분기 안에서는 기준 날짜를
+        며칠 바꿔도 목록이 동일할 수 있습니다.
+      </p>
+      <div class="table-wrapper">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>표지</th>
+              <th>타이틀</th>
+              <th>제작사</th>
+              <th>방송일</th>
+              <th>장르/테마</th>
+              <th>정보 보기</th>
+            </tr>
+          </thead>
+          <tbody id="newTableBody"></tbody>
+        </table>
+      </div>
+      <p id="newEmptyMessage" class="empty-message hidden">데이터가 없습니다.</p>
+    </section>
+
+    <section id="search" class="tab-panel">
+      <h2>애니메이션 검색 <span id="searchSourceStatus" class="source-status hidden"></span></h2>
+      <p class="section-hint">
+        방영 일자와 무관하게 타이틀(영어 또는 일본어)을 입력하면 가장 유사한 애니메이션
+        정보를 찾아 보여줍니다. 방영이 끝난 작품도 검색됩니다. 일치하는 후보가 여러
+        건이면 모두 나열합니다.
+      </p>
+      <div class="search-controls">
+        <input type="text" id="searchTitleInput" placeholder="예: Attack on Titan / 進撃の巨人" />
+        <button id="searchTitleBtn" type="button">검색</button>
+      </div>
+      <div id="searchResultsContainer"></div>
+      <p id="searchEmptyMessage" class="empty-message hidden">검색할 타이틀을 입력해주세요.</p>
+    </section>
+  </main>
+
+  <div id="imageModal" class="image-modal hidden">
+    <img id="imageModalImg" src="" alt="" />
+  </div>
+
+  <div id="tagListModal" class="tag-list-modal hidden">
+    <div class="tag-list-modal-content">
+      <button id="tagListCloseBtn" class="tag-list-close-btn" type="button" aria-label="닫기">&times;</button>
+      <h3 id="tagListModalTitle" class="tag-list-modal-title"></h3>
+      <div id="tagListModalBody" class="tag-list-chips"></div>
+    </div>
+  </div>
+
+  <script src="anilistClient.js"></script>
+  <script src="kitsuClient.js"></script>
+  <script src="jikanClient.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
