@@ -70,14 +70,15 @@
           <div id="ratingInfoPopup" class="info-popup hidden">
             실시간 TV 시청률은 공개 데이터가 없어, 선택한 API(AniList/Kitsu/Jikan)가 제공하는
             평점 · 참여자 수 · 인기도 순위 · 즐겨찾기 수를 기준으로 표시합니다.<br /><br />
-            심야(0~5시대) 방영작은 방송 업계 관례에 따라 전날 요일에 표시됩니다.<br /><br />
-            아래 정렬 기준으로 모든 요일 표를 한번에 재정렬할 수 있습니다.<br /><br />
+            심야(0~5시대) 방영작은 방송 업계 관례에 따라 전날 요일로 '방영일' 칸에 표시됩니다.<br /><br />
+            모든 작품을 하나의 표에 모아 보여주며, 아래 정렬 기준(방영일 포함)으로 표 전체를
+            한번에 재정렬할 수 있습니다.<br /><br />
             원피스 · 블리치처럼 방영을 시작한 지 매우 오래된 초장기 연재작은 목록에서 제외될 수
             있습니다.<br /><br />
             AniList는 인기도 순위를 직접 제공하지 않아, 지금 가져온 목록 안에서 인기순으로
             매긴 임시 순번(근사치)입니다.<br /><br />
             Kitsu API를 선택한 경우, 방영 요일·시간 정보가 상시 연재작 위주로만 있어 상당수
-            작품이 "방송 요일 정보 없음"으로 표시될 수 있습니다.<br /><br />
+            작품의 '방영일' 칸이 "정보 없음"으로 표시될 수 있습니다.<br /><br />
             선택한 API 호출이 실패하면 예시(Mock) 데이터로 자동 대체되며, 제목 옆 배지로
             실시간/예시 여부를 확인할 수 있습니다.
           </div>
@@ -86,10 +87,11 @@
       <div class="sort-toolbar">
         <label for="sortFieldSelect">정렬 기준</label>
         <select id="sortFieldSelect">
-          <option value="popularityRank">인기도 순위</option>
           <option value="score">평점</option>
+          <option value="popularityRank">인기도 순위</option>
           <option value="scoredBy">평가 참여자 수</option>
           <option value="favorites">즐겨찾기 수</option>
+          <option value="broadcastDayKorean">방영일</option>
         </select>
         <button id="sortDirectionBtn" type="button"></button>
       </div>
@@ -109,7 +111,8 @@
           <thead>
             <tr>
               <th>표지</th>
-              <th>타이틀</th>
+              <th>타이틀 (일본어)</th>
+              <th>타이틀 (영어)</th>
               <th>제작사</th>
               <th>방송일</th>
               <th>장르/테마</th>

@@ -253,29 +253,6 @@ body {
   color: #fff;
 }
 
-.day-block {
-  margin-bottom: 28px;
-}
-
-.day-block:last-child {
-  margin-bottom: 0;
-}
-
-.day-block-title {
-  margin: 0 0 10px;
-  font-size: 14px;
-  font-weight: 700;
-  color: #2b2f77;
-  padding-bottom: 6px;
-  border-bottom: 2px solid #2b2f77;
-}
-
-.day-block-empty {
-  color: #999;
-  font-size: 13px;
-  padding: 12px 0;
-}
-
 .table-wrapper {
   overflow-x: auto;
 }
