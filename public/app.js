@@ -183,22 +183,28 @@ const SORT_FIELD_LABELS = {
   score: '평점',
   scoredBy: '평가 참여자 수',
   popularityRank: '인기도 순위',
-  favorites: '즐겨찾기 수'
+  favorites: '즐겨찾기 수',
+  broadcastDayKorean: '방영일'
 };
 
 // 정렬 기준을 바꿀 때 기본으로 어느 방향에서 시작할지 결정한다.
 // (평점/참여자 수/즐겨찾기 수는 큰 값이 위로 오는 게 자연스럽고, 인기도 순위는
-//  MAL 관례상 숫자가 작을수록 인기가 높으므로 오름차순이 자연스럽다.)
+//  MAL 관례상 숫자가 작을수록 인기가 높으므로 오름차순이 자연스럽다. 방영일은
+//  일→토 순서로 읽는 게 자연스러워 오름차순을 기본으로 한다.)
 const SORT_DEFAULT_DIRECTION = {
   score: 'desc',
   scoredBy: 'desc',
   popularityRank: 'asc',
-  favorites: 'desc'
+  favorites: 'desc',
+  broadcastDayKorean: 'asc'
 };
 
 // 서버에서 받은 요일별 원본 데이터(days: 7개 요일 섹션, unscheduled: 방송 요일 미상 항목)
+// 화면에는 더 이상 요일별로 나누어 그리지 않고(renderRatingDays 참고) 하나의 표로
+// 합쳐서 보여주며, 각 행의 '방영일' 칸으로 요일을 구분한다. 기본 정렬 기준은 평점
+// 높은 순.
 let currentWeeklyRatings = { days: [], unscheduled: [] };
-let ratingSort = { field: 'popularityRank', direction: 'asc' };
+let ratingSort = { field: 'score', direction: 'desc' };
 
 function formatDate(date) {
   const y = date.getFullYear();
@@ -385,11 +391,24 @@ function createNumberCell(value) {
   return td;
 }
 
+// 방영일(broadcastDayKorean)은 숫자가 아니라 한 글자 요일 문자열이라, 정렬을 위해
+// 일→토 순서를 나타내는 숫자로 변환해야 한다. 방송 요일 미상(null)은 다른 필드의
+// 정렬 방식과 동일하게 항상 맨 뒤로 보낸다.
+const BROADCAST_DAY_ORDER = { 일: 0, 월: 1, 화: 2, 수: 3, 목: 4, 금: 5, 토: 6 };
+
+function getSortValue(item, field) {
+  if (field === 'broadcastDayKorean') {
+    const order = BROADCAST_DAY_ORDER[item.broadcastDayKorean];
+    return typeof order === 'number' ? order : null;
+  }
+  return item[field];
+}
+
 // null 값은 정렬 방향과 무관하게 항상 목록 맨 뒤로 보낸다.
 function sortItems(items, field, direction) {
   return [...items].sort((a, b) => {
-    const va = a[field];
-    const vb = b[field];
+    const va = getSortValue(a, field);
+    const vb = getSortValue(b, field);
     if (va === null && vb === null) return 0;
     if (va === null) return 1;
     if (vb === null) return -1;
@@ -423,6 +442,7 @@ const RATING_COLUMNS = [
   { label: '평가 참여자 수', getText: (item) => (typeof item.scoredBy === 'number' ? item.scoredBy.toLocaleString('ko-KR') : '정보 없음'), minWidth: 50 },
   { label: '인기도 순위', getText: (item) => (typeof item.popularityRank === 'number' ? `#${item.popularityRank}` : '정보 없음'), minWidth: 50 },
   { label: '즐겨찾기 수', getText: (item) => (typeof item.favorites === 'number' ? item.favorites.toLocaleString('ko-KR') : '정보 없음'), minWidth: 50 },
+  { label: '방영일', getText: (item) => item.broadcastDayKorean || '정보 없음', minWidth: 50 },
   { label: '방송시간', getText: (item) => `${item.broadcastTime || '정보 없음'}${isLateNightBroadcast(item.broadcastTime) ? ' 심야' : ''}`, minWidth: 60 },
   { label: '방송사', getText: (item) => item.broadcastStation || '정보 없음', minWidth: 60 },
   { label: '정보 보기', getText: () => '바로가기', minWidth: 50 }
@@ -493,6 +513,7 @@ const RATING_SORTABLE_HEADERS = [
   { label: '평가 참여자 수' },
   { label: '인기도 순위', sortField: 'popularityRank' },
   { label: '즐겨찾기 수' },
+  { label: '방영일', sortField: 'broadcastDayKorean' },
   { label: '방송시간' },
   { label: '방송사' },
   { label: '정보 보기' }
@@ -563,6 +584,7 @@ function createRatingRow(item, index, columnWidths) {
     createNumberCell(item.scoredBy),
     createCell(typeof item.popularityRank === 'number' ? `#${item.popularityRank}` : '정보 없음'),
     createNumberCell(item.favorites),
+    createCell(item.broadcastDayKorean),
     createBroadcastTimeCell(item.broadcastTime),
     createCell(item.broadcastStation),
     createLinkCell(item.officialSite)
@@ -597,42 +619,19 @@ function createRatingTable(items, columnWidths) {
   return wrapper;
 }
 
-function createDayBlock(title, items, columnWidths) {
-  const block = document.createElement('section');
-  block.className = 'day-block';
-
-  const heading = document.createElement('h3');
-  heading.className = 'day-block-title';
-  heading.textContent = title;
-  block.appendChild(heading);
-
-  if (items.length === 0) {
-    const empty = document.createElement('p');
-    empty.className = 'day-block-empty';
-    empty.textContent = '이 요일에 방영 중인 작품이 없습니다.';
-    block.appendChild(empty);
-  } else {
-    block.appendChild(createRatingTable(items, columnWidths));
-  }
-
-  return block;
-}
-
-// 'YYYY-MM-DD' + 요일 한 글자를 "9월 11일 (금)" 형태로 표시
-function formatDayTitle(dateStr, dayOfWeek) {
-  const [, m, d] = dateStr.split('-');
-  return `${parseInt(m, 10)}월 ${parseInt(d, 10)}일 (${dayOfWeek})`;
-}
-
+// 과거에는 요일마다 별도 표(day-block)로 나누어 그렸지만, 지금은 요일별 분류를
+// 폐기하고 모든 항목(요일 미상 포함)을 하나의 표로 합쳐서 보여준다. 각 행의
+// '방영일' 칸(RATING_COLUMNS)이 요일 구분을 대신하며, 정렬 기준 중 하나로도
+// 선택할 수 있다(handleHeaderSortClick/handleSortFieldChange).
 function renderRatingDays(weeklyRatings) {
   currentWeeklyRatings = weeklyRatings || { days: [], unscheduled: [] };
   ratingDaysContainer.innerHTML = '';
 
   const days = currentWeeklyRatings.days || [];
   const unscheduled = currentWeeklyRatings.unscheduled || [];
-  const totalItems = days.reduce((sum, day) => sum + day.items.length, 0) + unscheduled.length;
+  const allItems = days.flatMap((day) => day.items).concat(unscheduled);
 
-  if (totalItems === 0) {
+  if (allItems.length === 0) {
     ratingEmptyMessage.textContent = '데이터가 없습니다.';
     ratingEmptyMessage.classList.remove('hidden');
     return;
@@ -640,19 +639,8 @@ function renderRatingDays(weeklyRatings) {
 
   ratingEmptyMessage.classList.add('hidden');
 
-  // 요일 표마다 열 너비가 제각각 정해지지 않도록, 전체 항목(모든 요일 + 요일
-  // 미상)을 통틀어 가장 긴 값 기준으로 열 너비를 한 번만 계산해 모든 표에 공유한다.
-  const allItems = days.flatMap((day) => day.items).concat(unscheduled);
   const columnWidths = computeRatingColumnWidths(allItems);
-
-  // 가장 빠른 날짜(기간 시작일)부터 순서대로 위에서 아래로 배치
-  days.forEach((day) => {
-    ratingDaysContainer.appendChild(createDayBlock(formatDayTitle(day.date, day.dayOfWeek), day.items, columnWidths));
-  });
-
-  if (unscheduled.length > 0) {
-    ratingDaysContainer.appendChild(createDayBlock('방송 요일 정보 없음', unscheduled, columnWidths));
-  }
+  ratingDaysContainer.appendChild(createRatingTable(allItems, columnWidths));
 }
 
 function updateSortDirectionButtonLabel() {
@@ -674,7 +662,30 @@ function handleSortDirectionToggle() {
 
 sortFieldSelect.addEventListener('change', handleSortFieldChange);
 sortDirectionBtn.addEventListener('click', handleSortDirectionToggle);
+// 드롭다운 마크업의 기본 선택 항목과 무관하게, 실제 기본 정렬 기준(ratingSort)과
+// 항상 일치하도록 초기값을 코드에서 맞춰준다.
+sortFieldSelect.value = ratingSort.field;
 updateSortDirectionButtonLabel();
+
+// firstAirDate는 'YYYY-MM-DD' 문자열이거나(각 클라이언트 공통) 날짜를 모를 때
+// '미정' 같은 문자열이다. 'YYYY-MM-DD' 형식끼리는 문자열 비교만으로도 날짜 순서와
+// 일치하므로 별도 Date 파싱 없이 정렬할 수 있고, 형식에 안 맞는 값은 다른 정렬
+// 기준의 null 처리와 동일하게 항상 맨 뒤로 보낸다.
+function getAirDateSortValue(item) {
+  const value = item?.firstAirDate;
+  return typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value) ? value : null;
+}
+
+function sortReleasesByAirDate(releases) {
+  return [...releases].sort((a, b) => {
+    const da = getAirDateSortValue(a);
+    const db = getAirDateSortValue(b);
+    if (da === null && db === null) return 0;
+    if (da === null) return 1;
+    if (db === null) return -1;
+    return da < db ? -1 : da > db ? 1 : 0;
+  });
+}
 
 function renderNewReleasesTable(releases) {
   newTableBody.innerHTML = '';
@@ -687,7 +698,7 @@ function renderNewReleasesTable(releases) {
 
   newEmptyMessage.classList.add('hidden');
 
-  releases.forEach((item) => {
+  sortReleasesByAirDate(releases).forEach((item) => {
     const tr = document.createElement('tr');
     tr.appendChild(createCoverCell(item.coverImage, item.title));
     tr.appendChild(createTitleCell(item.title, getTitleColumnWidth() - RATING_COLUMN_CELL_PADDING));
