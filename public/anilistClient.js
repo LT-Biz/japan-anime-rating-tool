@@ -53,9 +53,9 @@
   ];
 
   const MOCK_NEW_RELEASES = [
-    { title: 'Re:ZERO -Starting Life in Another World- Season 4', studio: 'White Fox', firstAirDate: '2026-04-08', genres: ['Drama', 'Fantasy', 'Psychological'], officialSite: 'https://anilist.co/anime/189046', category: 'TV', themes: ['Isekai', 'Time Loop'], coverImage: 'https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx189046-yaHWtS5FII46.jpg' },
-    { title: 'Mushoku Tensei III: Isekai Ittara Honki Dasu', studio: 'Studio Bind', firstAirDate: '2026-07-06', genres: ['Adventure', 'Drama', 'Fantasy', 'Ecchi'], officialSite: 'https://anilist.co/anime/178789', category: 'TV', themes: ['Isekai', 'Reincarnation'], coverImage: 'https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx178789-hNXjKFzUq7mk.jpg' },
-    { title: 'That Time I Got Reincarnated as a Slime Season 4', studio: '8bit', firstAirDate: '2025-04-05', genres: ['Action', 'Adventure', 'Comedy', 'Fantasy'], officialSite: 'https://anilist.co/anime/182205', category: 'TV', themes: ['Isekai', 'Kingdom Management'], coverImage: 'https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx182205-q2AeO1owuQbO.jpg' }
+    { titleJapanese: 'Re:ゼロから始める異世界生活 4th season', titleEnglish: 'Re:ZERO -Starting Life in Another World- Season 4', studio: 'White Fox', firstAirDate: '2026-04-08', genres: ['Drama', 'Fantasy', 'Psychological'], officialSite: 'https://anilist.co/anime/189046', category: 'TV', themes: ['Isekai', 'Time Loop'], coverImage: 'https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx189046-yaHWtS5FII46.jpg' },
+    { titleJapanese: '無職転生III ～異世界行ったら本気だす～', titleEnglish: 'Mushoku Tensei III: Isekai Ittara Honki Dasu', studio: 'Studio Bind', firstAirDate: '2026-07-06', genres: ['Adventure', 'Drama', 'Fantasy', 'Ecchi'], officialSite: 'https://anilist.co/anime/178789', category: 'TV', themes: ['Isekai', 'Reincarnation'], coverImage: 'https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx178789-hNXjKFzUq7mk.jpg' },
+    { titleJapanese: '転生したらスライムだった件 第4期', titleEnglish: 'That Time I Got Reincarnated as a Slime Season 4', studio: '8bit', firstAirDate: '2025-04-05', genres: ['Action', 'Adventure', 'Comedy', 'Fantasy'], officialSite: 'https://anilist.co/anime/182205', category: 'TV', themes: ['Isekai', 'Kingdom Management'], coverImage: 'https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx182205-q2AeO1owuQbO.jpg' }
   ];
 
   // ---- 공통 유틸 ------------------------------------------------------------
@@ -225,8 +225,11 @@
   }
 
   function mapToReleaseItem(media) {
+    const { titleJapanese, titleEnglish } = pickTitle(media.title);
+
     return {
-      title: media.title?.romaji || media.title?.english || '정보 없음',
+      titleJapanese,
+      titleEnglish,
       studio: extractStudio(media.studios),
       firstAirDate: formatFirstAirDate(media.startDate),
       genres: media.genres || [],

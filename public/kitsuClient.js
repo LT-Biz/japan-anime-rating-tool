@@ -51,8 +51,8 @@
   ];
 
   const MOCK_NEW_RELEASES = [
-    { title: 'Re:ZERO -Starting Life in Another World- Season 4', studio: 'White Fox', firstAirDate: '2026-04-08', genres: ['Drama', 'Fantasy', 'Suspense'], officialSite: 'https://kitsu.io/anime/re-zero-starting-life-in-another-world-season-4', category: 'TV', themes: ['Isekai', 'Time Manipulation'], coverImage: null },
-    { title: 'Mushoku Tensei III: Isekai Ittara Honki Dasu', studio: 'Studio Bind', firstAirDate: '2026-07-06', genres: ['Adventure', 'Drama', 'Fantasy', 'Ecchi'], officialSite: 'https://kitsu.io/anime/mushoku-tensei-iii', category: 'TV', themes: ['Isekai', 'Reincarnation'], coverImage: null }
+    { titleJapanese: 'Re:ゼロから始める異世界生活 4th season', titleEnglish: 'Re:ZERO -Starting Life in Another World- Season 4', studio: 'White Fox', firstAirDate: '2026-04-08', genres: ['Drama', 'Fantasy', 'Suspense'], officialSite: 'https://kitsu.io/anime/re-zero-starting-life-in-another-world-season-4', category: 'TV', themes: ['Isekai', 'Time Manipulation'], coverImage: null },
+    { titleJapanese: '無職転生III ～異世界行ったら本気だす～', titleEnglish: 'Mushoku Tensei III: Isekai Ittara Honki Dasu', studio: 'Studio Bind', firstAirDate: '2026-07-06', genres: ['Adventure', 'Drama', 'Fantasy', 'Ecchi'], officialSite: 'https://kitsu.io/anime/mushoku-tensei-iii', category: 'TV', themes: ['Isekai', 'Reincarnation'], coverImage: null }
   ];
 
   function sleep(ms) {
@@ -368,8 +368,11 @@
 
   function mapToReleaseItem(anime, includedIndex) {
     const attrs = anime.attributes;
+    const { titleJapanese, titleEnglish } = extractTitles(attrs);
+
     return {
-      title: attrs.canonicalTitle || attrs.titles?.en || '정보 없음',
+      titleJapanese,
+      titleEnglish,
       studio: extractStudio(anime, includedIndex),
       firstAirDate: attrs.startDate || '미정',
       genres: extractGenres(anime, includedIndex),

@@ -698,10 +698,13 @@ function renderNewReleasesTable(releases) {
 
   newEmptyMessage.classList.add('hidden');
 
+  const titleContentWidth = getTitleColumnWidth() - RATING_COLUMN_CELL_PADDING;
+
   sortReleasesByAirDate(releases).forEach((item) => {
     const tr = document.createElement('tr');
-    tr.appendChild(createCoverCell(item.coverImage, item.title));
-    tr.appendChild(createTitleCell(item.title, getTitleColumnWidth() - RATING_COLUMN_CELL_PADDING));
+    tr.appendChild(createCoverCell(item.coverImage, item.titleEnglish || item.titleJapanese));
+    tr.appendChild(createTitleCell(item.titleJapanese, titleContentWidth));
+    tr.appendChild(createTitleCell(item.titleEnglish, titleContentWidth));
     tr.appendChild(createCell(item.studio));
     tr.appendChild(createCell(item.firstAirDate));
     tr.appendChild(createTagListCell(item));

@@ -52,10 +52,10 @@
   ];
 
   const MOCK_NEW_RELEASES = [
-    { title: 'Re:Zero kara Hajimeru Isekai Seikatsu 4th Season', studio: 'White Fox', firstAirDate: '2026-04-08', genres: ['Drama', 'Fantasy', 'Suspense'], officialSite: 'https://re-zero-anime.jp/tv/', category: 'TV', themes: ['Isekai', 'Time Manipulation'], coverImage: 'https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx189046-yaHWtS5FII46.jpg' },
-    { title: 'Steel Ball Run: JoJo no Kimyou na Bouken', studio: 'David Production', firstAirDate: '2026-03-19', genres: ['Action', 'Adventure', 'Mystery', 'Supernatural'], officialSite: 'https://jojo-portal-anime.com/sbr/', category: 'TV', themes: ['Superpowers', 'Journey'], coverImage: null },
-    { title: 'Mushoku Tensei III: Isekai Ittara Honki Dasu', studio: 'Studio Bind', firstAirDate: '2026-07-06', genres: ['Adventure', 'Drama', 'Fantasy', 'Ecchi'], officialSite: 'https://mushokutensei.jp', category: 'TV', themes: ['Isekai', 'Reincarnation'], coverImage: 'https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx178789-hNXjKFzUq7mk.jpg' },
-    { title: 'Kusuriya no Hitorigoto 2nd Season', studio: 'OLM, TOHO animation STUDIO', firstAirDate: '2025-01-10', genres: ['Drama', 'Mystery'], officialSite: 'https://kusuriyanohitorigoto.jp/season2/', category: 'TV', themes: ['Palace', 'Medicine'], coverImage: null }
+    { titleJapanese: 'Re:ゼロから始める異世界生活 4th season', titleEnglish: 'Re:ZERO -Starting Life in Another World- Season 4', studio: 'White Fox', firstAirDate: '2026-04-08', genres: ['Drama', 'Fantasy', 'Suspense'], officialSite: 'https://re-zero-anime.jp/tv/', category: 'TV', themes: ['Isekai', 'Time Manipulation'], coverImage: 'https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx189046-yaHWtS5FII46.jpg' },
+    { titleJapanese: 'スティール・ボール・ラン ジョジョの奇妙な冒険', titleEnglish: "Steel Ball Run: JoJo's Bizarre Adventure", studio: 'David Production', firstAirDate: '2026-03-19', genres: ['Action', 'Adventure', 'Mystery', 'Supernatural'], officialSite: 'https://jojo-portal-anime.com/sbr/', category: 'TV', themes: ['Superpowers', 'Journey'], coverImage: null },
+    { titleJapanese: '無職転生III ～異世界行ったら本気だす～', titleEnglish: 'Mushoku Tensei III: Isekai Ittara Honki Dasu', studio: 'Studio Bind', firstAirDate: '2026-07-06', genres: ['Adventure', 'Drama', 'Fantasy', 'Ecchi'], officialSite: 'https://mushokutensei.jp', category: 'TV', themes: ['Isekai', 'Reincarnation'], coverImage: 'https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx178789-hNXjKFzUq7mk.jpg' },
+    { titleJapanese: '薬屋のひとりごと 第2期', titleEnglish: 'The Apothecary Diaries Season 2', studio: 'OLM, TOHO animation STUDIO', firstAirDate: '2025-01-10', genres: ['Drama', 'Mystery'], officialSite: 'https://kusuriyanohitorigoto.jp/season2/', category: 'TV', themes: ['Palace', 'Medicine'], coverImage: null }
   ];
 
   // ---- 공통 유틸 ------------------------------------------------------------
@@ -406,7 +406,8 @@
       }
 
       const releases = merged.map((anime) => ({
-        title: anime.title,
+        titleJapanese: anime.title_japanese || '정보 없음',
+        titleEnglish: anime.title_english || anime.title || '정보 없음',
         studio: extractStudio(anime),
         firstAirDate: anime.aired?.from ? anime.aired.from.slice(0, 10) : '미정',
         genres: extractGenres(anime),
