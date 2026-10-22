@@ -1,0 +1,36 @@
+# 매주 한 번 Vercel Deploy Hook을 호출해 사이트를 다시 배포한다.
+# 배포 빌드(`npm run build`) 중에 scripts/build-syoboi.js가 Syoboi 최신 편성표를 새로 받아 함께 올린다.
+#
+# 필요한 설정(직접 해야 함):
+#   1. Vercel 프로젝트 > Settings > Git > Deploy Hooks 에서 Hook을 만들고(브랜치: master) URL을 복사
+#   2. 이 저장소 > Settings > Secrets and variables > Actions 에 VERCEL_DEPLOY_HOOK_URL 이라는 이름으로 등록
+# URL은 비밀값이므로 코드/채팅에 붙여넣지 말 것.
+name: Refresh Syoboi schedule
+
+on:
+  schedule:
+    - cron: '0 19 * * 0' # 매주 일요일 19:00 UTC = 월요일 04:00 JST
+  workflow_dispatch: {} # Actions 탭에서 수동 실행
+
+# 저장소 접근 권한이 전혀 필요 없다(외부 URL 호출만 함).
+permissions: {}
+
+concurrency:
+  group: refresh-syoboi
+  cancel-in-progress: false
+
+jobs:
+  trigger-deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Trigger Vercel deploy hook
+        env:
+          VERCEL_DEPLOY_HOOK_URL: ${{ secrets.VERCEL_DEPLOY_HOOK_URL }}
+        run: |
+          if [ -z "$VERCEL_DEPLOY_HOOK_URL" ]; then
+            echo "::error::VERCEL_DEPLOY_HOOK_URL 시크릿이 설정되지 않았습니다."
+            exit 1
+          fi
+          curl --fail --silent --show-error --max-time 30 -X POST "$VERCEL_DEPLOY_HOOK_URL" > /dev/null
+          echo "Deploy hook 호출 완료"
