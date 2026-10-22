@@ -9,13 +9,18 @@
 // JSON이 아니라 JS 파일로 쓰는 이유: 브라우저는 file:// 로 연 페이지에서 fetch()로 JSON을
 // 읽지 못하지만, <script src>는 읽을 수 있다. 그래서 index.html을 파일로 직접 열어도,
 // 정적 호스팅으로 올려도 똑같이 동작한다.
+//
+// --soft: Vercel 배포 빌드에서 쓰는 모드. Syoboi가 안 되거나 결과가 비정상이어도 빌드를 실패시키지 않고,
+// 이미 저장소에 있는 기존 편성표 파일을 그대로 둔 채 정상 종료(exit 0)한다. (Syoboi 장애가
+// 사이트 배포 실패로 번지지 않게 하기 위함)
 
 const fs = require('fs');
 const path = require('path');
 
 const BASE_URL = 'https://cal.syoboi.jp';
 const OUTPUT_PATH = path.join(__dirname, '..', 'public', 'syoboi-schedule.js');
-const LOOKAHEAD_DAYS = 8;
+const LOOKAHEAD_DAYS = 14; // 주 1회 재배포 주기보다 넉넉하게
+const REQUEST_TIMEOUT_MS = 20000;
 const TITLE_BATCH_SIZE = 40;
 const ANIME_CATEGORIES = new Set(['1', '10']); // 직접 확인: 1=TV 애니메이션, 10=재방송/구작 애니메이션
 const REQUEST_INTERVAL_MS = 400;
@@ -24,7 +29,7 @@ const DAY_LABELS = ['일', '월', '화', '수', '목', '금', '토'];
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 async function fetchText(url) {
-  const response = await fetch(url);
+  const response = await fetch(url, { signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS) });
   if (!response.ok) throw new Error(`Syoboi 응답 오류: HTTP ${response.status} (${url})`);
   return response.text();
 }
@@ -145,12 +150,21 @@ async function main() {
     });
   });
 
+  // Syoboi가 빈 응답/오류 페이지를 정상 응답처럼 돌려줘도 멀쩡한 기존 파일을 덮어쓰지 않도록 막는다.
+  if (titles.length === 0) throw new Error('편성 작품이 0건입니다(비정상 응답으로 보고 저장하지 않습니다).');
+
   const output = { generatedAt: new Date().toISOString(), titles };
   fs.writeFileSync(OUTPUT_PATH, `window.SYOBOI_SCHEDULE = ${JSON.stringify(output)};\n`);
   console.log(`[build-syoboi] ${titles.length}개 작품 편성을 ${OUTPUT_PATH} 에 저장했습니다.`);
 }
 
+const softMode = process.argv.includes('--soft');
+
 main().catch((error) => {
+  if (softMode) {
+    console.warn(`[build-syoboi] 갱신 실패, 기존 편성표를 그대로 사용합니다: ${error.message}`);
+    return;
+  }
   console.error(`[build-syoboi] 실패: ${error.message}`);
   process.exit(1);
 });
