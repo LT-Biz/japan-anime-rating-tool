@@ -471,6 +471,121 @@
   // 에러로 대체한다. 다른 소스(Jikan/Kitsu)를 대신 호출하지 않는다 — 어떤 API를 쓸지는
   // 화면 상단 소스 선택 버튼으로 사용자가 직접 고른다.
 
+  // ---- 만화/라이트노벨 순위(IP 발굴용) -------------------------------------------
+  // 일본 원작 만화(format MANGA)와 라이트노벨(format NOVEL)을 AniList 지표(인기도/급상승/평점/최근
+  // 연재 시작)로 보여준다. 애니화 여부는 relations 중 relationType === 'ADAPTATION'이면서 노드가
+  // ANIME인 항목으로 판정한다(없으면 '미애니화' = IP 발굴 후보). 주의: popularity는 AniList 이용자의
+  // 목록 등록 수라 일본 서점 판매량이 아니다. 판매 부수/순위는 이 API로 알 수 없다.
+  const BOOK_PAGE_SIZE = 50;
+  const BOOK_MAX_PAGES = 4; // 정렬 기준 하나당 최대 200건(요청 4번, 큐 간격 때문에 약 9초)
+  const BOOK_SORTS = {
+    popularity: { sort: 'POPULARITY_DESC' },
+    trending: { sort: 'TRENDING_DESC' },
+    // 평점순은 이용자가 몇 명 안 되는 작품이 상위를 채우지 않게 최소 인기도를 둔다.
+    score: { sort: 'SCORE_DESC', minPopularity: 10000 },
+    // 최근 3년 안에 시작한 작품만 인기순으로. (START_DATE_DESC 정렬은 월/일이 빈 날짜와 미래 작품이
+    // 섞여 순서가 엉망이라(직접 확인) 쓰지 않고, 시작일 필터 + 인기순으로 "요즘 뜨는 신작"을 본다.)
+    recent: { sort: 'POPULARITY_DESC', recentYears: 3 }
+  };
+  const BOOK_STATUS_LABELS = {
+    FINISHED: '완결', RELEASING: '연재 중', NOT_YET_RELEASED: '발표 전', CANCELLED: '중단', HIATUS: '휴재'
+  };
+
+  const BOOK_QUERY = `
+    query($page: Int, $perPage: Int, $format: MediaFormat, $sort: [MediaSort], $minPopularity: Int, $startAfter: FuzzyDateInt) {
+      Page(page: $page, perPage: $perPage) {
+        pageInfo { hasNextPage }
+        media(type: MANGA, countryOfOrigin: JP, format: $format, sort: $sort, status_not: NOT_YET_RELEASED, popularity_greater: $minPopularity, startDate_greater: $startAfter) {
+          id
+          title { romaji english native }
+          format
+          status
+          volumes
+          chapters
+          startDate { year month day }
+          averageScore
+          popularity
+          trending
+          favourites
+          genres
+          tags { name isMediaSpoiler }
+          coverImage { large }
+          siteUrl
+          staff(perPage: 3, sort: RELEVANCE) { edges { node { name { native full } } } }
+          relations { edges { relationType(version: 2) node { type status } } }
+        }
+      }
+    }
+  `;
+
+  // ANIME 각색 작품들의 상태를 대표 상태 하나로 요약한다: 방영 중 > 제작 예정 > 방영 완료 > 중단 > 없음.
+  function resolveAdaptationState(relations) {
+    const animeNodes = (relations?.edges || [])
+      .filter((edge) => edge.relationType === 'ADAPTATION' && edge.node?.type === 'ANIME')
+      .map((edge) => edge.node);
+    if (animeNodes.length === 0) return { state: 'none', animeCount: 0 };
+
+    const has = (status) => animeNodes.some((node) => node.status === status);
+    let state = 'finished';
+    if (has('RELEASING')) state = 'airing';
+    else if (has('NOT_YET_RELEASED')) state = 'planned';
+    else if (has('FINISHED')) state = 'finished';
+    else if (has('CANCELLED')) state = 'cancelled';
+    return { state, animeCount: animeNodes.length };
+  }
+
+  function extractAuthors(staff) {
+    const names = (staff?.edges || []).map((edge) => edge.node?.name?.native || edge.node?.name?.full).filter(Boolean);
+    return [...new Set(names)].slice(0, 2);
+  }
+
+  function mapToBookItem(media, rank) {
+    const { titleJapanese, titleEnglish } = pickTitle(media.title);
+    return {
+      anilistId: media.id,
+      rank,
+      titleJapanese,
+      titleEnglish,
+      authors: extractAuthors(media.staff),
+      score: parseScore(media.averageScore),
+      popularity: typeof media.popularity === 'number' ? media.popularity : null,
+      trending: typeof media.trending === 'number' ? media.trending : null,
+      favorites: typeof media.favourites === 'number' ? media.favourites : null,
+      volumes: typeof media.volumes === 'number' ? media.volumes : null,
+      status: BOOK_STATUS_LABELS[media.status] || '정보 없음',
+      startDate: formatFirstAirDate(media.startDate),
+      adaptation: resolveAdaptationState(media.relations),
+      officialSite: media.siteUrl || null,
+      genres: media.genres || [],
+      themes: extractThemes(media.tags),
+      coverImage: media.coverImage?.large || null
+    };
+  }
+
+  // type: 'MANGA' | 'NOVEL', sortKey: BOOK_SORTS의 키. 실패하면 Mock 없이 에러로 돌려준다(순위는
+  // 가짜 데이터를 보여주면 오도하므로).
+  async function getBookRanking(type, sortKey) {
+    const sortConfig = BOOK_SORTS[sortKey] || BOOK_SORTS.popularity;
+    // AniList는 null 필터 값을 받지 않으므로(Illegal operator and value combination) 필요할 때만 넣는다.
+    const variables = { format: type === 'NOVEL' ? 'NOVEL' : 'MANGA', sort: [sortConfig.sort] };
+    if (sortConfig.minPopularity) variables.minPopularity = sortConfig.minPopularity;
+    if (sortConfig.recentYears) variables.startAfter = (new Date().getUTCFullYear() - sortConfig.recentYears) * 10000;
+
+    try {
+      const items = [];
+      for (let page = 1; page <= BOOK_MAX_PAGES; page += 1) {
+        const data = await gqlRequest(BOOK_QUERY, { ...variables, page, perPage: BOOK_PAGE_SIZE });
+        (data?.Page?.media || []).forEach((media) => items.push(mapToBookItem(media, items.length + 1)));
+        if (!data?.Page?.pageInfo?.hasNextPage) break;
+      }
+      if (items.length === 0) throw new Error('조건에 맞는 작품이 없습니다.');
+      return { source: 'anilist', type, sort: sortKey, items };
+    } catch (error) {
+      console.error(`[anilistClient] getBookRanking 조회 실패: ${error.message}`);
+      return { source: 'error', type, sort: sortKey, items: [], errorMessage: `AniList 조회 실패: ${error.message}` };
+    }
+  }
+
   // ---- 평점 변화 이력 ----------------------------------------------------------
   // AniList의 MediaTrend(Page.mediaTrends)는 작품별로 '하루에 한 번'(일본 시간 0시 기준)
   // 찍힌 averageScore 스냅샷을 준다(직접 확인). 시/분 단위 이력은 없으므로, "방송 시각 + 6시간"
@@ -666,6 +781,7 @@
     getNewReleases,
     searchAnimeByTitle,
     checkStatus,
-    getScoreHistory
+    getScoreHistory,
+    getBookRanking
   };
 })();

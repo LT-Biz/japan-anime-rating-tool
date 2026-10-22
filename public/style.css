@@ -759,3 +759,292 @@ body {
 .status-legend-hint {
   color: #999;
 }
+
+/* ---- 일본 만화·소설 순위 화면 ---- */
+.mode-switch {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.mode-btn {
+  flex: 1;
+  padding: 14px 0;
+  border: 2px solid #2b2f77;
+  background: #fff;
+  color: #2b2f77;
+  font-size: 15px;
+  font-weight: 700;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.mode-btn.active {
+  background: #2b2f77;
+  color: #fff;
+}
+
+.book-type-tabs {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 16px;
+}
+
+.book-type-btn {
+  flex: 1;
+  padding: 12px 0;
+  border: none;
+  background: #e6e7ee;
+  color: #555;
+  font-size: 14px;
+  font-weight: 600;
+  border-radius: 8px 8px 0 0;
+  cursor: pointer;
+}
+
+.book-type-btn.active {
+  background: #fff;
+  color: #2b2f77;
+}
+
+.book-panel {
+  background: #fff;
+  border-radius: 0 0 8px 8px;
+  padding: 16px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+}
+
+.book-panel h2 {
+  margin-top: 0;
+  font-size: 16px;
+  color: #333;
+}
+
+.book-filter {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: 8px;
+  cursor: pointer;
+}
+
+.book-legend {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+  margin: 0 0 10px;
+  font-size: 12px;
+  color: #555;
+}
+
+/* 애니화 상태 뱃지 */
+.adapt-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: help;
+}
+
+.adapt-badge-none {
+  background: #eef0fb;
+  color: #2b2f77;
+  box-shadow: inset 0 0 0 1px #2b2f77;
+}
+
+.adapt-badge-airing {
+  background: #e6f6ea;
+  color: #1f7a3a;
+}
+
+.adapt-badge-planned {
+  background: #fff3dc;
+  color: #9a6200;
+}
+
+.adapt-badge-finished {
+  background: #eee;
+  color: #666;
+}
+
+.adapt-badge-cancelled {
+  background: #fbe9ea;
+  color: #a02a30;
+}
+
+/* 만화·소설 순위: 조회 기준/필터/정렬 도구줄과 정렬 가능한 머리글 */
+.book-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 8px;
+  margin-bottom: 10px;
+  font-size: 13px;
+  color: #555;
+}
+
+.book-toolbar-title {
+  min-width: 34px;
+  font-weight: 700;
+  color: #2b2f77;
+}
+
+.book-toolbar-note {
+  font-size: 12px;
+  color: #999;
+}
+
+.book-toolbar select,
+.book-min-input {
+  font-size: 13px;
+  padding: 5px 8px;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  background: #fff;
+}
+
+.book-min-input {
+  width: 96px;
+}
+
+.book-min-input-narrow {
+  width: 70px;
+}
+
+.book-small-btn {
+  font-size: 12px;
+  font-weight: 600;
+  padding: 5px 10px;
+  border: 1px solid #2b2f77;
+  border-radius: 6px;
+  background: #fff;
+  color: #2b2f77;
+  cursor: pointer;
+}
+
+.book-small-btn:disabled {
+  border-color: #ddd;
+  color: #bbb;
+  cursor: default;
+}
+
+.data-table th.sortable {
+  cursor: pointer;
+  user-select: none;
+}
+
+.data-table th.sortable:hover {
+  background: #e6e7ee;
+}
+
+.data-table th.sorted {
+  color: #2b2f77;
+}
+
+.sort-indicator {
+  font-size: 11px;
+}
+
+/* 웹소설 랭킹(소설가가 되자/카쿠요무) */
+.webnovel-query {
+  width: 170px;
+}
+
+.webnovel-inline-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.webnovel-inline-group[hidden] {
+  display: none;
+}
+
+.webnovel-mixed {
+  font-weight: 600;
+  color: #9a6200;
+}
+
+/* 여러 개 선택할 수 있는 필터 드롭다운(multiSelect.js) */
+.multi-select {
+  position: relative;
+  display: inline-block;
+  font-size: 13px;
+}
+
+.multi-select > summary {
+  list-style: none;
+  min-width: 90px;
+  max-width: 220px;
+  padding: 5px 24px 5px 8px;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  background: #fff;
+  color: #333;
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  position: relative;
+}
+
+.multi-select > summary::-webkit-details-marker {
+  display: none;
+}
+
+.multi-select > summary::after {
+  content: '▾';
+  position: absolute;
+  right: 8px;
+  color: #888;
+}
+
+.multi-select-active > summary {
+  border-color: #2b2f77;
+  color: #2b2f77;
+  font-weight: 600;
+}
+
+.multi-select-menu {
+  position: absolute;
+  z-index: 30;
+  top: calc(100% + 4px);
+  left: 0;
+  min-width: 190px;
+  max-height: 280px;
+  overflow-y: auto;
+  padding: 6px;
+  background: #fff;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.multi-select-clear {
+  display: block;
+  width: 100%;
+  margin-bottom: 4px;
+  padding: 5px 8px;
+  border: none;
+  border-radius: 6px;
+  background: #f3f3f3;
+  color: #555;
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.multi-select-option {
+  display: block;
+  padding: 4px 8px;
+  border-radius: 6px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.multi-select-option:hover {
+  background: #eef0fb;
+}

@@ -5,8 +5,9 @@
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "build": "node scripts/build-syoboi.js --soft",
+    "build": "node scripts/build-syoboi.js --soft && node scripts/build-webnovel.js --soft",
     "build:syoboi": "node scripts/build-syoboi.js",
+    "build:webnovel": "node scripts/build-webnovel.js",
     "dev": "node --watch server.js"
   },
   "devDependencies": {
