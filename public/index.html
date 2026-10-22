@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>일본 애니메이션 방영 정보</title>
-  <link rel="stylesheet" href="style.css?v=1" />
+  <link rel="stylesheet" href="style.css?v=2" />
 </head>
 <body>
   <header class="app-header">
@@ -91,10 +91,17 @@
           <option value="popularityRank">인기도 순위</option>
           <option value="scoredBy">평가 참여자 수</option>
           <option value="favorites">즐겨찾기 수</option>
+          <option value="firstAirDate">방영 시작일</option>
           <option value="broadcastDayKorean">방영일</option>
         </select>
         <button id="sortDirectionBtn" type="button"></button>
       </div>
+      <p class="status-legend">
+        <span><span class="status-dot status-dot-airing"></span>방영 중</span>
+        <span><span class="status-dot status-dot-stopped"></span>휴방·방영 종료</span>
+        <span><span class="status-dot status-dot-unknown"></span>확인 불가</span>
+        <span class="status-legend-hint">점에 마우스를 올리면 판정 근거가 보입니다.</span>
+      </p>
       <div id="ratingDaysContainer"></div>
       <p id="ratingEmptyMessage" class="empty-message hidden">데이터가 없습니다.</p>
     </section>
@@ -153,9 +160,12 @@
     </div>
   </div>
 
-  <script defer src="anilistClient.js?v=1"></script>
-  <script defer src="kitsuClient.js?v=1"></script>
-  <script defer src="jikanClient.js?v=1"></script>
-  <script defer src="app.js?v=1"></script>
+  <!-- 편성표 데이터는 매일 새로 만들어지므로 immutable 캐시/버전 쿼리를 붙이지 않는다 -->
+  <script defer src="syoboi-schedule.js"></script>
+  <script defer src="syoboiSchedule.js?v=3"></script>
+  <script defer src="anilistClient.js?v=2"></script>
+  <script defer src="kitsuClient.js?v=2"></script>
+  <script defer src="jikanClient.js?v=2"></script>
+  <script defer src="app.js?v=2"></script>
 </body>
 </html>

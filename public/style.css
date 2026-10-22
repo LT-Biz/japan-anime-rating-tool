@@ -651,3 +651,111 @@ body {
   background: #f3f3f3;
   color: #666;
 }
+
+/* 평점 변화 그래프 팝업(평점 칸 마우스 오버). .hidden과 명시도가 같아 나중에 오는 display 규칙이
+   이기는 문제를 피하려고 두 클래스를 모두 요구하는 override를 둔다. */
+.score-hover {
+  cursor: help;
+  text-decoration: underline dotted #999;
+  text-underline-offset: 3px;
+}
+
+.score-history-popup {
+  position: fixed;
+  z-index: 50;
+  width: 392px;
+  max-width: calc(100vw - 16px);
+  box-sizing: border-box;
+  background: #fff;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.16);
+  padding: 12px 14px;
+  font-size: 12px;
+  line-height: 1.6;
+  color: #555;
+  pointer-events: none;
+}
+
+.score-history-popup.hidden {
+  display: none;
+}
+
+.score-history-title {
+  margin: 0 0 6px;
+  font-size: 13px;
+  font-weight: 700;
+  color: #222;
+}
+
+.score-history-message,
+.score-history-note {
+  margin: 4px 0 0;
+}
+
+.score-chart {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.score-chart-grid {
+  stroke: #e6e6e6;
+  stroke-width: 1;
+}
+
+.score-chart-label {
+  font-size: 10px;
+  fill: #888;
+}
+
+.score-chart-line {
+  fill: none;
+  stroke: #4b53c9;
+  stroke-width: 2;
+  stroke-linejoin: round;
+}
+
+.score-chart-dot {
+  fill: #4b53c9;
+}
+
+/* 방영 상태 점(일본어 타이틀 앞): 초록=방영 중, 빨강=휴방/종료, 회색=확인 불가 */
+.status-dot {
+  display: inline-block;
+  width: 9px;
+  height: 9px;
+  margin-right: 6px;
+  border-radius: 50%;
+  vertical-align: middle;
+  cursor: help;
+}
+
+.status-dot-airing {
+  background: #2fa84f;
+}
+
+.status-dot-stopped {
+  background: #d9363e;
+}
+
+.status-dot-unknown {
+  background: #b5b5b5;
+}
+
+.status-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 16px;
+  margin: 0 0 10px;
+  font-size: 12px;
+  color: #555;
+}
+
+.status-legend .status-dot {
+  cursor: default;
+}
+
+.status-legend-hint {
+  color: #999;
+}
