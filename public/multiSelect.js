@@ -84,6 +84,16 @@
         render();
         updateSummary();
       },
+      // 기본 선택값을 코드에서 지정한다(목록에 없는 값은 무시). onChange는 부르지 않는다.
+      setValues(values) {
+        selected.clear();
+        const valid = new Set(currentOptions.map((option) => option.value));
+        values.forEach((value) => {
+          if (valid.has(value)) selected.add(value);
+        });
+        render();
+        updateSummary();
+      },
       close() {
         details.open = false;
       }

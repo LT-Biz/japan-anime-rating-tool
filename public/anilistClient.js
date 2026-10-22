@@ -222,6 +222,7 @@
   }
 
   function resolveAiringState(media, syoboiEntry) {
+    if (media.status === 'NOT_YET_RELEASED') return { state: 'unknown', reason: '아직 방영(공개) 전' };
     const airingAt = media.nextAiringEpisode?.airingAt;
     if (typeof airingAt === 'number') return describeNextBroadcast(airingAt * 1000);
 
@@ -470,6 +471,99 @@
   // 세 함수 모두 API 호출에 실패하면(요일별/신작은) Mock 데이터로, (검색은) 명확한
   // 에러로 대체한다. 다른 소스(Jikan/Kitsu)를 대신 호출하지 않는다 — 어떤 API를 쓸지는
   // 화면 상단 소스 선택 버튼으로 사용자가 직접 고른다.
+
+  // ---- 시즌별 TV 외 작품(ONA/OVA/극장판/스페셜/뮤직/TV 숏) ---------------------------
+  // 분기 신작(ONA 등) 탭용. format이 TV가 아닌 모든 작품을 연도(seasonYear)+시즌(season) 조합별로 받는다.
+  // 시즌 하나는 대개 50~100건(요청 1~2번)이지만 여러 연도·시즌을 고르면 조합 수만큼 순차로 요청한다
+  // (요청 간격 큐 때문에 조합당 약 2~4초). 조합별 결과는 메모리에 캐시하고 실패는 캐시하지 않는다.
+  // 시즌은 일본 방송 분기(겨울 1~3월/봄 4~6월/여름 7~9월/가을 10~12월)이며 resolveSeason과 같은 기준이다.
+  const NON_TV_PAGE_SIZE = 50;
+  const NON_TV_MAX_PAGES = 8; // 조합 하나당 최대 400건
+  const nonTvSeasonCache = new Map();
+  // 중국 제작 작품(donghua)은 제외한다(요청). AniList에는 제작국 제외 필터가 없어 `countryOfOrigin`을 받아
+  // 클라이언트에서 거른다. 다른 국가(KR/TW 등)를 빼려면 여기에 코드를 추가한다.
+  const EXCLUDED_ORIGIN_COUNTRIES = new Set(['CN']);
+
+  const NON_TV_QUERY = `
+    query($page: Int, $perPage: Int, $season: MediaSeason, $seasonYear: Int) {
+      Page(page: $page, perPage: $perPage) {
+        pageInfo { hasNextPage }
+        media(season: $season, seasonYear: $seasonYear, type: ANIME, format_not: TV, sort: POPULARITY_DESC) {
+          id
+          status
+          episodes
+          season
+          seasonYear
+          countryOfOrigin
+          startDate { year month day }
+          title { romaji english native }
+          format
+          genres
+          tags { name isMediaSpoiler }
+          coverImage { large }
+          averageScore
+          favourites
+          popularity
+          stats { scoreDistribution { amount } }
+          nextAiringEpisode { airingAt }
+          siteUrl
+        }
+      }
+    }
+  `;
+
+  function fetchNonTvSeasonMedia(year, season) {
+    const key = `${year}-${season}`;
+    if (!nonTvSeasonCache.has(key)) {
+      const promise = (async () => {
+        const list = [];
+        for (let page = 1; page <= NON_TV_MAX_PAGES; page += 1) {
+          const data = await gqlRequest(NON_TV_QUERY, { page, perPage: NON_TV_PAGE_SIZE, season, seasonYear: year });
+          list.push(...(data?.Page?.media || []));
+          if (!data?.Page?.pageInfo?.hasNextPage) break;
+        }
+        return list;
+      })();
+      promise.catch(() => nonTvSeasonCache.delete(key));
+      nonTvSeasonCache.set(key, promise);
+    }
+    return nonTvSeasonCache.get(key);
+  }
+
+  // combos: [{ year: 2026, season: 'FALL' }, ...]. 일부 조합만 실패하면 나머지는 보여주고 failed에 담아 돌려준다.
+  async function getNonTvSeasonal(combos, onProgress) {
+    const syoboiIndex = await loadSyoboiIndex();
+    const mediaById = new Map();
+    const failed = [];
+
+    for (let index = 0; index < combos.length; index += 1) {
+      const { year, season } = combos[index];
+      try {
+        const list = await fetchNonTvSeasonMedia(year, season);
+        list.forEach((media) => {
+          if (!EXCLUDED_ORIGIN_COUNTRIES.has(media.countryOfOrigin)) mediaById.set(media.id, media);
+        });
+      } catch (error) {
+        console.error(`[anilistClient] getNonTvSeasonal ${year} ${season} 조회 실패: ${error.message}`);
+        failed.push({ year, season, message: error.message });
+      }
+      if (onProgress) onProgress(index + 1, combos.length);
+    }
+
+    if (mediaById.size === 0 && failed.length > 0) {
+      return { source: 'error', items: [], failed, errorMessage: `AniList 조회 실패: ${failed[0].message}` };
+    }
+
+    const items = assignPopularityRanks(
+      [...mediaById.values()].map((media) => ({
+        ...mapToWeeklyItem(media, syoboiIndex),
+        formatCode: media.format,
+        season: media.season,
+        seasonYear: media.seasonYear
+      }))
+    );
+    return { source: 'anilist', items, failed };
+  }
 
   // ---- 만화/라이트노벨 순위(IP 발굴용) -------------------------------------------
   // 일본 원작 만화(format MANGA)와 라이트노벨(format NOVEL)을 AniList 지표(인기도/급상승/평점/최근
@@ -782,6 +876,7 @@
     searchAnimeByTitle,
     checkStatus,
     getScoreHistory,
-    getBookRanking
+    getBookRanking,
+    getNonTvSeasonal
   };
 })();

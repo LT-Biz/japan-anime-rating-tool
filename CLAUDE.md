@@ -30,6 +30,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - `public/index.html` — 3개 탭 구조: 요일별 방영 애니메이션 / 분기 신작 애니메이션 / 애니메이션 검색. `<script>` 로드 순서는 `anilistClient.js` → `kitsuClient.js` → `jikanClient.js` → `app.js`(세 클라이언트끼리는 서로 호출하지 않으므로 상호 순서 자체는 무관하지만, 화면 버튼 순서와 맞춰뒀다).
 - `public/style.css` — 외부 UI 라이브러리 없는 Vanilla CSS. 컨테이너는 `width:100%`로 브라우저 폭에 동적으로 맞춘다(고정 `max-width` 없음).
 - `public/multiSelect.js` — 여러 개를 동시에 고르는 필터 드롭다운 공용 모듈(`window.MultiSelect.create({ id, options, onChange })`, `<details>` + 체크박스). 아무것도 고르지 않으면 "전체"(필터 없음)이고, 고른 값 중 **하나라도 맞으면 통과(OR)**하며 서로 다른 필터끼리는 AND다. `booksApp.js`(애니화·연재 상태)와 `webNovelApp.js`(장르·상태)가 쓴다. 이 두 파일보다 먼저 로드해야 한다. `setOptions`는 사라진 옵션을 선택에서 빼지만 `onChange`는 부르지 않는다(호출한 쪽이 `getValues()`로 상태를 맞춘다).
+- `public/onaApp.js` — **분기 신작 애니메이션 (ONA 등)** 탭(`#ona`). 아래 "분기 신작 (ONA 등) 탭" 항목 참고.
 - `public/booksApp.js` — 상단 화면 전환(`.mode-btn`: 애니메이션 방영 정보 / 만화·소설 순위 정보, `#animeMode`/`#booksMode`)과 **만화·소설 순위 화면**. 애니메이션 쪽(데이터 소스 버튼, 기준 날짜, 3개 탭)과 완전히 별개이며 AniList만 쓴다(`AniListClient.getBookRanking(type, sortKey)`, `type`은 `'MANGA'|'NOVEL'`). `app.js`의 표 셀 헬퍼와 `setupInfoPopup`/`updateSourceStatus`/`getTitleColumnWidth`를 재사용하므로 `app.js` 뒤에 로드한다. 아래 "만화·소설 순위" 항목 참고.
 - `scripts/build-webnovel.js` + `public/webnovel-ranking.js` + `public/webNovelApp.js` — 웹소설 랭킹(소설가가 되자/카쿠요무) 주간·월간 상위 300건 스냅샷 생성 스크립트, 그 산출물(`window.WEBNOVEL_RANKING`), 화면. `booksApp.js`의 탭(만화/라이트노벨/소설가가 되자/카쿠요무)이 `books:tab` 이벤트로 탭 변경을 알리면 `webNovelApp.js`가 자기 패널(`#webNovelPanel`)을 보이거나 숨긴다(자세한 내용은 아래 "웹소설 랭킹" 항목).
 - `public/syoboiSchedule.js` — Syoboi 편성표 매칭/병합 공용 모듈(`window.SyoboiSchedule`). `anilistClient.js`/`kitsuClient.js`가 사용한다(자세한 내용은 아래 `kitsuClient.js` 항목).
@@ -84,6 +85,15 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - **검색(`searchAnimeByTitle`)**: `/anime?q=` 사용, 정확히 일치하지 않아도 유사도 기반 결과를 그대로 반환(별도 유사도 계산 없음). API 실패 시 다른 기능과 달리 **Mock 데이터로 대체하지 않고** 명확한 에러 메시지를 반환한다(검색은 특정 검색어에 대한 응답이라 무관한 Mock을 보여주면 오도하게 됨) — 이 원칙은 세 클라이언트 모두 동일하다.
 - **날짜 연산**: 문자열 파싱은 항상 `Date.UTC`/`getUTC*`로 처리한다(`app.js`/다른 두 클라이언트도 동일 원칙). `new Date('YYYY-MM-DD')` + 로컬 getter 조합은 방문자 브라우저 타임존에 따라 하루 밀리는 버그를 낸 적이 있음 — 새 날짜 로직 추가 시 이 패턴을 반복하지 말 것.
 - **Mock 폴백**: 이 클라이언트 자체가 실패했을 때만 사용(요일별/신작). 다른 소스로 자동 전환되지 않는다. Mock 데이터의 공식 사이트/커버 이미지 링크는 실제 존재를 확인한 URL만 사용한다(가짜 도메인 금지).
+
+### 분기 신작 (ONA 등) 탭(`getNonTvSeasonal` / `onaApp.js`)
+
+- 기존 "분기 신작 애니메이션" 탭은 이름이 **"분기 신작 애니메이션 (TV 방영)"** 이며 세 소스 모두 TV 형태(format TV)만 받는다. 요일별 방영 탭도 TV만이다. 이 새 탭은 **format이 TV가 아닌 모든 작품**(ONA/OVA/극장판/스페셜/뮤직/TV 숏)이 대상이다(AniList `format_not: TV`).
+- **AniList 전용이다** — 위의 데이터 소스 버튼(AniList/Kitsu/Jikan)과 무관하게 항상 AniList를 쓴다(탭 안내 "?"에도 적음). Kitsu/Jikan으로 확장하려면 각 API의 subtype/filter별로 따로 조회해야 한다.
+- 표는 요일별 방영 표와 같은 칸에서 **방영일·방송 시간을 빼고 형태·시즌을 더한** 것이다(방송사, 평점 그래프 hover, 방영 상태 점, 정렬은 그대로). 방영 상태 점은 AniList `status`로 판정하고 방영 전(`NOT_YET_RELEASED`)은 회색이다. 정렬은 헤더 클릭 + 정렬 기준 select(평점/인기도 순위/참여자 수/즐겨찾기/방영 시작일)이며 기본은 평점 높은 순이다. 형태 필터도 다중 선택이다(요청 외 추가).
+- **연도·시즌 다중 선택 + "조회" 버튼**: 조합(연도×시즌)마다 AniList를 호출하므로 선택만으로는 요청하지 않고 "조회"를 눌러야 적용된다(8조합 이상이면 오래 걸린다고 안내). 한 조합은 대개 50~100건(요청 1~2번), 조합별 결과는 `nonTvSeasonCache`에 캐시하고 실패는 캐시하지 않는다. 일부 조합만 실패하면 나머지는 보여주고 요약에 실패 조합을 적는다. 인기도 순위는 **그때 불러온 작품 전체 안에서**의 순위다(`assignPopularityRanks`).
+- **처음 열 때(탭 클릭) 오늘이 속한 시즌 하나만** 자동으로 불러온다(AniList 요청 한도를 아끼려고 탭을 열기 전에는 부르지 않음). 시즌은 일본 방송 분기(겨울 1~3월/봄 4~6월/여름 7~9월/가을 10~12월, `resolveSeason`과 같은 기준)이다. 연도 목록은 내년~2000년.
+- **중국 제작 작품은 제외한다**(`EXCLUDED_ORIGIN_COUNTRIES = {'CN'}`, 요청). AniList에는 제작국 제외 필터가 없어 `countryOfOrigin`을 받아 클라이언트에서 거른다. 직접 확인: 인기 있는 중국 작품(donghua)은 AniList에 `season`/`seasonYear`가 비어 있어 시즌 조회에는 원래 잡히지 않고(5개 시즌 표본에 CN 0건), 요일별 TV 표본 72건도 전부 JP다. 한국(KR) 등 다른 국가는 제외하지 않는다.
 
 ### 만화·소설 순위(`getBookRanking` / `booksApp.js`) 핵심 로직과 한계
 
