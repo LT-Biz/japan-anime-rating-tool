@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>일본 애니메이션·만화 정보</title>
-  <link rel="stylesheet" href="style.css?v=3" />
+  <link rel="stylesheet" href="style.css?v=4" />
 </head>
 <body>
   <header class="app-header">
@@ -174,18 +174,70 @@
             </div>
           </span>
         </h2>
-        <div class="sort-toolbar">
-          <label for="bookSortSelect">순위 기준</label>
+        <div class="book-toolbar">
+          <label for="bookSortSelect">조회 기준</label>
           <select id="bookSortSelect">
             <option value="popularity">인기도순</option>
             <option value="trending">급상승순</option>
             <option value="score">평점순 (인기도 1만 이상)</option>
             <option value="recent">최근 3년 내 시작작 (인기도순)</option>
           </select>
-          <label class="book-filter">
-            <input type="checkbox" id="bookOnlyUnadapted" />
-            아직 애니화 안 된 작품만
-          </label>
+          <span class="book-toolbar-note">AniList에서 이 기준의 상위 200건을 받아옵니다. 아래 필터·정렬은 그 200건 안에서만 적용됩니다.</span>
+        </div>
+        <div class="book-toolbar">
+          <span class="book-toolbar-title">필터</span>
+          <label for="bookAdaptationFilter">애니화</label>
+          <select id="bookAdaptationFilter">
+            <option value="all">전체</option>
+            <option value="none">미애니화</option>
+            <option value="planned">애니 제작 예정</option>
+            <option value="airing">애니 방영 중</option>
+            <option value="finished">애니 방영 완료</option>
+            <option value="cancelled">애니 중단</option>
+          </select>
+          <label for="bookMinPopularity">인기도 ≥</label>
+          <input type="number" id="bookMinPopularity" class="book-min-input" min="0" step="1000" placeholder="예: 20000" />
+          <label for="bookMinScore">평점 ≥</label>
+          <input type="number" id="bookMinScore" class="book-min-input book-min-input-narrow" min="0" max="10" step="0.1" placeholder="예: 7.5" />
+          <label for="bookMinFavorites">즐겨찾기 ≥</label>
+          <input type="number" id="bookMinFavorites" class="book-min-input" min="0" step="100" placeholder="예: 1000" />
+          <label for="bookMinTrending">급상승 ≥</label>
+          <input type="number" id="bookMinTrending" class="book-min-input book-min-input-narrow" min="0" step="1" placeholder="예: 5" />
+          <button id="bookFilterResetBtn" type="button" class="book-small-btn">필터 초기화</button>
+        </div>
+        <div class="book-toolbar">
+          <span class="book-toolbar-title">정렬</span>
+          <label for="bookSort1">1차</label>
+          <select id="bookSort1" class="book-sort-field">
+            <option value="">(순위 순)</option>
+            <option value="popularity">인기도</option>
+            <option value="score">평점</option>
+            <option value="favorites">즐겨찾기</option>
+            <option value="trending">급상승</option>
+            <option value="adaptation">애니화</option>
+          </select>
+          <button type="button" class="book-sort-dir book-small-btn" disabled>↓ 내림차순</button>
+          <label for="bookSort2">2차</label>
+          <select id="bookSort2" class="book-sort-field">
+            <option value="">(없음)</option>
+            <option value="popularity">인기도</option>
+            <option value="score">평점</option>
+            <option value="favorites">즐겨찾기</option>
+            <option value="trending">급상승</option>
+            <option value="adaptation">애니화</option>
+          </select>
+          <button type="button" class="book-sort-dir book-small-btn" disabled>↓ 내림차순</button>
+          <label for="bookSort3">3차</label>
+          <select id="bookSort3" class="book-sort-field">
+            <option value="">(없음)</option>
+            <option value="popularity">인기도</option>
+            <option value="score">평점</option>
+            <option value="favorites">즐겨찾기</option>
+            <option value="trending">급상승</option>
+            <option value="adaptation">애니화</option>
+          </select>
+          <button type="button" class="book-sort-dir book-small-btn" disabled>↓ 내림차순</button>
+          <button id="bookSortResetBtn" type="button" class="book-small-btn">정렬 초기화</button>
         </div>
         <p class="book-legend">
           <span class="adapt-badge adapt-badge-none">미애니화</span>
@@ -223,6 +275,6 @@
   <script defer src="kitsuClient.js?v=2"></script>
   <script defer src="jikanClient.js?v=2"></script>
   <script defer src="app.js?v=2"></script>
-  <script defer src="booksApp.js?v=1"></script>
+  <script defer src="booksApp.js?v=2"></script>
 </body>
 </html>
