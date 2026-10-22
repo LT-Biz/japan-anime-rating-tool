@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>일본 애니메이션·만화 정보</title>
-  <link rel="stylesheet" href="style.css?v=5" />
+  <link rel="stylesheet" href="style.css?v=6" />
 </head>
 <body>
   <header class="app-header">
@@ -188,23 +188,10 @@
         </div>
         <div class="book-toolbar">
           <span class="book-toolbar-title">필터</span>
-          <label for="bookAdaptationFilter">애니화</label>
-          <select id="bookAdaptationFilter">
-            <option value="all">전체</option>
-            <option value="none">미애니화</option>
-            <option value="planned">애니 제작 예정</option>
-            <option value="airing">애니 방영 중</option>
-            <option value="finished">애니 방영 완료</option>
-            <option value="cancelled">애니 중단</option>
-          </select>
-          <label for="bookStatusFilter">연재 상태</label>
-          <select id="bookStatusFilter">
-            <option value="all">전체</option>
-            <option value="연재 중">연재 중</option>
-            <option value="완결">완결</option>
-            <option value="휴재">휴재</option>
-            <option value="중단">중단</option>
-          </select>
+          <span>애니화</span>
+          <span id="bookAdaptationSlot"></span>
+          <span>연재 상태</span>
+          <span id="bookStatusSlot"></span>
           <label for="bookMinPopularity">인기도 ≥</label>
           <input type="number" id="bookMinPopularity" class="book-min-input" min="0" step="1000" placeholder="예: 20000" />
           <label for="bookMinScore">평점 ≥</label>
@@ -308,9 +295,10 @@
   <script defer src="kitsuClient.js?v=2"></script>
   <script defer src="jikanClient.js?v=2"></script>
   <script defer src="app.js?v=2"></script>
-  <script defer src="booksApp.js?v=4"></script>
+  <script defer src="multiSelect.js?v=1"></script>
+  <script defer src="booksApp.js?v=5"></script>
   <!-- 웹소설 랭킹 스냅샷은 주 1회 새로 만들어지므로 immutable 캐시/버전 쿼리를 붙이지 않는다 -->
   <script defer src="webnovel-ranking.js"></script>
-  <script defer src="webNovelApp.js?v=1"></script>
+  <script defer src="webNovelApp.js?v=2"></script>
 </body>
 </html>

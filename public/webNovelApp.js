@@ -68,8 +68,8 @@
   const state = {
     site: 'NAROU',
     period: 'weekly',
-    genre: 'all',
-    status: 'all',
+    genre: new Set(), // 장르 필터(여러 개 선택). 비어 있으면 전체
+    status: new Set(), // 상태 필터(여러 개 선택). 비어 있으면 전체
     mediaMix: 'all', // 'all' | 'none'(표기가 없는 작품만 = 아직 서적화 등 안 된 후보) | 'has'
     query: '',
     min: { periodPoint: null, totalPoint: null },
@@ -113,8 +113,8 @@
   function applyFilters(items) {
     const query = normalize(state.query).trim();
     return items.filter((item) => {
-      if (state.genre !== 'all' && item.genre !== state.genre) return false;
-      if (state.status !== 'all' && item.status !== state.status) return false;
+      if (state.genre.size > 0 && !state.genre.has(item.genre)) return false;
+      if (state.status.size > 0 && !state.status.has(item.status)) return false;
       if (state.mediaMix === 'none' && item.mediaMix.length > 0) return false;
       if (state.mediaMix === 'has' && item.mediaMix.length === 0) return false;
       if (query && !normalize(`${item.title} ${item.author} ${item.tags.join(' ')}`).includes(query)) return false;
@@ -199,7 +199,7 @@
     // 1행: 기간 + 도움말
     toolbarRows.period = makeSelect('webNovelPeriod', [['weekly', '주간 랭킹'], ['monthly', '월간 랭킹']], (value) => {
       state.period = value;
-      state.genre = 'all'; // 기간이 바뀌면 장르 목록도 달라진다
+      state.genre = new Set(); // 기간이 바뀌면 장르 목록도 달라진다
       rebuildGenreOptions();
       renderView();
     });
@@ -210,13 +210,20 @@
     ]);
 
     // 2행: 필터
-    toolbarRows.genre = makeSelect('webNovelGenre', [['all', '전체']], (value) => {
-      state.genre = value;
-      renderView();
+    toolbarRows.genre = MultiSelect.create({
+      id: 'webNovelGenre',
+      onChange: (values) => {
+        state.genre = values;
+        renderView();
+      }
     });
-    toolbarRows.status = makeSelect('webNovelStatus', [['all', '전체'], ['연재 중', '연재 중'], ['완결', '완결'], ['단편', '단편'], ['휴재', '휴재']], (value) => {
-      state.status = value;
-      renderView();
+    toolbarRows.status = MultiSelect.create({
+      id: 'webNovelStatus',
+      options: ['연재 중', '완결', '단편', '휴재'].map((value) => ({ value, label: value })),
+      onChange: (values) => {
+        state.status = values;
+        renderView();
+      }
     });
     toolbarRows.mediaMix = makeSelect('webNovelMediaMix', [['all', '전체'], ['none', '서적화·미디어믹스 표기 없는 작품만'], ['has', '표기 있는 작품만']], (value) => {
       state.mediaMix = value;
@@ -246,8 +253,8 @@
     resetFilter.addEventListener('click', resetFilters);
     const row2 = el('div', { className: 'book-toolbar' }, [
       el('span', { className: 'book-toolbar-title', text: '필터' }),
-      el('label', { text: '장르', htmlFor: 'webNovelGenre' }), toolbarRows.genre,
-      el('label', { text: '상태', htmlFor: 'webNovelStatus' }), toolbarRows.status,
+      el('span', { text: '장르' }), toolbarRows.genre.element,
+      el('span', { text: '상태' }), toolbarRows.status.element,
       el('label', { text: '서적화', htmlFor: 'webNovelMediaMix' }), toolbarRows.mediaMix,
       toolbarRows.query,
       toolbarRows.periodGroup,
@@ -295,12 +302,11 @@
     const items = currentRanking() || [];
     const counts = new Map();
     items.forEach((item) => counts.set(item.genre, (counts.get(item.genre) || 0) + 1));
-    const select = toolbarRows.genre;
-    select.replaceChildren(el('option', { value: 'all', text: '전체' }));
-    [...counts.entries()].sort((a, b) => b[1] - a[1]).forEach(([genre, count]) => {
-      select.appendChild(el('option', { value: genre, text: `${genre} (${count})` }));
-    });
-    select.value = state.genre;
+    // 장르 목록은 많이 나온 순으로 보여주고, 옵션이 바뀌면서 사라진 장르는 선택에서 빠진다.
+    toolbarRows.genre.setOptions(
+      [...counts.entries()].sort((a, b) => b[1] - a[1]).map(([genre, count]) => ({ value: genre, label: `${genre} (${count})` }))
+    );
+    state.genre = toolbarRows.genre.getValues();
   }
 
   function syncSortControls() {
@@ -333,12 +339,13 @@
   }
 
   function resetFilters() {
-    state.genre = 'all';
-    state.status = 'all';
+    state.genre = new Set();
+    state.status = new Set();
     state.mediaMix = 'all';
     state.query = '';
     state.min = { periodPoint: null, totalPoint: null };
-    toolbarRows.status.value = 'all';
+    toolbarRows.genre.reset();
+    toolbarRows.status.reset();
     toolbarRows.mediaMix.value = 'all';
     toolbarRows.query.value = '';
     toolbarRows.minPeriod.value = '';
@@ -431,8 +438,8 @@
 
     const shown = applySorts(applyFilters(ranking));
     const filterParts = [];
-    if (state.genre !== 'all') filterParts.push(state.genre);
-    if (state.status !== 'all') filterParts.push(state.status);
+    if (state.genre.size > 0) filterParts.push([...state.genre].join(' / '));
+    if (state.status.size > 0) filterParts.push([...state.status].join(' / '));
     if (state.mediaMix === 'none') filterParts.push('서적화 표기 없음');
     if (state.mediaMix === 'has') filterParts.push('서적화 표기 있음');
     if (state.query.trim()) filterParts.push(`검색 "${state.query.trim()}"`);
@@ -454,7 +461,8 @@
 
   function showSite(site) {
     state.site = site;
-    state.genre = 'all';
+    state.genre = new Set();
+    toolbarRows.genre.reset();
     state.sorts = [];
     toolbarRows.mediaMix.value = state.mediaMix;
     rebuildGenreOptions();

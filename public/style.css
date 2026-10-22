@@ -967,3 +967,84 @@ body {
   font-weight: 600;
   color: #9a6200;
 }
+
+/* 여러 개 선택할 수 있는 필터 드롭다운(multiSelect.js) */
+.multi-select {
+  position: relative;
+  display: inline-block;
+  font-size: 13px;
+}
+
+.multi-select > summary {
+  list-style: none;
+  min-width: 90px;
+  max-width: 220px;
+  padding: 5px 24px 5px 8px;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  background: #fff;
+  color: #333;
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  position: relative;
+}
+
+.multi-select > summary::-webkit-details-marker {
+  display: none;
+}
+
+.multi-select > summary::after {
+  content: '▾';
+  position: absolute;
+  right: 8px;
+  color: #888;
+}
+
+.multi-select-active > summary {
+  border-color: #2b2f77;
+  color: #2b2f77;
+  font-weight: 600;
+}
+
+.multi-select-menu {
+  position: absolute;
+  z-index: 30;
+  top: calc(100% + 4px);
+  left: 0;
+  min-width: 190px;
+  max-height: 280px;
+  overflow-y: auto;
+  padding: 6px;
+  background: #fff;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.multi-select-clear {
+  display: block;
+  width: 100%;
+  margin-bottom: 4px;
+  padding: 5px 8px;
+  border: none;
+  border-radius: 6px;
+  background: #f3f3f3;
+  color: #555;
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.multi-select-option {
+  display: block;
+  padding: 4px 8px;
+  border-radius: 6px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.multi-select-option:hover {
+  background: #eef0fb;
+}
