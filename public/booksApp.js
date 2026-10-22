@@ -71,6 +71,19 @@
   let booksLoadedOnce = false;
   let currentItems = [];
 
+  // 만화/라이트노벨 탭 이름 옆에 데이터 출처와 연동 상태를 붙인다(예: "만화 (AniList API 실시간 연동됨)").
+  // 소설가가 되자/카쿠요무(스냅샷 데이터)와 구분하기 위함이며, 상태는 그 탭의 조회 결과를 따른다.
+  function updateTabLabel(type, source) {
+    const button = document.querySelector(`.book-type-btn[data-book-type="${type}"]`);
+    if (!button) return;
+    const statusText = {
+      loading: '불러오는 중',
+      anilist: '실시간 연동됨',
+      error: '조회 실패'
+    }[source];
+    button.textContent = `${BOOK_TYPE_LABELS[type]} (AniList API${statusText ? ` ${statusText}` : ''})`;
+  }
+
   function loadRanking() {
     const key = `${state.type}|${state.sort}`;
     if (!cache.has(key)) {
@@ -293,14 +306,18 @@
   async function refresh() {
     renderToken += 1;
     const token = renderToken;
+    const type = state.type;
 
-    bookTitle.textContent = `일본 ${BOOK_TYPE_LABELS[state.type]} 순위`;
+    bookTitle.textContent = `일본 ${BOOK_TYPE_LABELS[type]} 순위`;
+    updateTabLabel(type, 'loading');
     bookEmptyMessage.classList.add('hidden');
     bookSummary.textContent = '';
     bookTableContainer.replaceChildren();
     bookLoading.classList.remove('hidden');
 
     const result = await loadRanking();
+    // 그 사이 다른 탭으로 옮겨 이 응답이 버려져도, 이 탭 이름의 "불러오는 중"은 풀어 준다.
+    updateTabLabel(type, result.source);
     if (token !== renderToken) return; // 그 사이 다른 조건으로 바뀜
 
     bookLoading.classList.add('hidden');
