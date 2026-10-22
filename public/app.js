@@ -304,20 +304,22 @@ function createScoreChart(points) {
   const rawMin = Math.min(...values);
   const rawMax = Math.max(...values);
   const margin = Math.max(0.2, (rawMax - rawMin) * 0.2);
-  const yMin = Math.floor((rawMin - margin) * 10) / 10;
-  const yMax = Math.ceil((rawMax + margin) * 10) / 10;
+  // 가로 기준선은 1점 단위(정수)로 긋는다. 눈금이 3개뿐이면 그 사이 점수를 읽기 어려워서, 범위를 정수로
+  // 맞추고(0~10점 안) 그 안의 정수마다 기준선과 눈금 글자를 둔다.
+  const yMin = Math.max(0, Math.floor(rawMin - margin));
+  const yMax = Math.min(10, Math.max(Math.ceil(rawMax + margin), yMin + 1));
   const innerWidth = width - pad.left - pad.right;
   const xAt = (index) => (points.length === 1 ? pad.left + innerWidth / 2 : pad.left + (innerWidth * index) / (points.length - 1));
   const yAt = (value) => pad.top + ((height - pad.top - pad.bottom) * (yMax - value)) / (yMax - yMin);
 
   const svg = createSvgElement('svg', { viewBox: `0 0 ${width} ${height}`, class: 'score-chart', role: 'img' });
 
-  [yMin, (yMin + yMax) / 2, yMax].forEach((tick) => {
+  for (let tick = yMin; tick <= yMax; tick += 1) {
     svg.appendChild(createSvgElement('line', { x1: pad.left, x2: width - pad.right, y1: yAt(tick), y2: yAt(tick), class: 'score-chart-grid' }));
     const label = createSvgElement('text', { x: pad.left - 4, y: yAt(tick) + 3, class: 'score-chart-label', 'text-anchor': 'end' });
-    label.textContent = tick.toFixed(1);
+    label.textContent = String(tick);
     svg.appendChild(label);
-  });
+  }
 
   // 가로축에는 첫 방송일과 마지막 방송일만 표시한다(MM/DD).
   const formatShortDate = (date) => date.slice(5).replace('-', '/');
