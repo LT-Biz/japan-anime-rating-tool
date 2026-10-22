@@ -26,6 +26,10 @@
   // AniList Rate Limit(현재 분당 약 30회) 대응: 이 클라이언트가 보내는 모든 요청은
   // 아래 큐를 거쳐 최소 이 간격 이상을 두고 순차 실행된다.
   const MIN_REQUEST_INTERVAL_MS = 2100;
+  // 목록(요일별/분기 신작/ONA 등/만화·소설 순위)에서 뺄 장르(요청: Hentai). AniList는 `genre_not_in`으로 서버에서
+  // 걸러 주므로 페이지 수도 줄어든다. 사용자가 직접 입력하는 검색은 거르지 않는다. 직접 확인: ONA 등 탭에는
+  // Hentai 작품이 시즌당 10~17건 섞여 있었고 TV/만화 목록에는 없었다.
+  const EXCLUDED_GENRES_GQL = JSON.stringify(['Hentai']);
 
   const PAGE_SIZE = 50;
   const WEEKLY_MAX_PAGES = 3;
@@ -389,7 +393,7 @@
     query($page: Int, $perPage: Int) {
       Page(page: $page, perPage: $perPage) {
         pageInfo { hasNextPage }
-        media(status: RELEASING, type: ANIME, format: TV, sort: POPULARITY_DESC) {
+        media(status: RELEASING, type: ANIME, format: TV, genre_not_in: ${EXCLUDED_GENRES_GQL}, sort: POPULARITY_DESC) {
           id
           status
           episodes
@@ -414,7 +418,7 @@
     query($page: Int, $perPage: Int, $season: MediaSeason, $seasonYear: Int) {
       Page(page: $page, perPage: $perPage) {
         pageInfo { hasNextPage }
-        media(season: $season, seasonYear: $seasonYear, type: ANIME, format: TV) {
+        media(season: $season, seasonYear: $seasonYear, type: ANIME, format: TV, genre_not_in: ${EXCLUDED_GENRES_GQL}) {
           title { romaji english }
           format
           genres
@@ -488,7 +492,7 @@
     query($page: Int, $perPage: Int, $season: MediaSeason, $seasonYear: Int) {
       Page(page: $page, perPage: $perPage) {
         pageInfo { hasNextPage }
-        media(season: $season, seasonYear: $seasonYear, type: ANIME, format_not: TV, sort: POPULARITY_DESC) {
+        media(season: $season, seasonYear: $seasonYear, type: ANIME, format_not: TV, genre_not_in: ${EXCLUDED_GENRES_GQL}, sort: POPULARITY_DESC) {
           id
           status
           episodes
@@ -589,7 +593,7 @@
     query($page: Int, $perPage: Int, $format: MediaFormat, $sort: [MediaSort], $minPopularity: Int, $startAfter: FuzzyDateInt) {
       Page(page: $page, perPage: $perPage) {
         pageInfo { hasNextPage }
-        media(type: MANGA, countryOfOrigin: JP, format: $format, sort: $sort, status_not: NOT_YET_RELEASED, popularity_greater: $minPopularity, startDate_greater: $startAfter) {
+        media(type: MANGA, countryOfOrigin: JP, format: $format, sort: $sort, genre_not_in: ${EXCLUDED_GENRES_GQL}, status_not: NOT_YET_RELEASED, popularity_greater: $minPopularity, startDate_greater: $startAfter) {
           id
           title { romaji english native }
           format

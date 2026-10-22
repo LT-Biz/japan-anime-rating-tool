@@ -93,6 +93,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - 표는 요일별 방영 표와 같은 칸에서 **방영일·방송 시간을 빼고 형태·시즌을 더한** 것이다(방송사, 평점 그래프 hover, 방영 상태 점, 정렬은 그대로). 방영 상태 점은 AniList `status`로 판정하고 방영 전(`NOT_YET_RELEASED`)은 회색이다. 정렬은 헤더 클릭 + 정렬 기준 select(평점/인기도 순위/참여자 수/즐겨찾기/방영 시작일)이며 기본은 평점 높은 순이다. 형태 필터도 다중 선택이다(요청 외 추가).
 - **연도·시즌 다중 선택 + "조회" 버튼**: 조합(연도×시즌)마다 AniList를 호출하므로 선택만으로는 요청하지 않고 "조회"를 눌러야 적용된다(8조합 이상이면 오래 걸린다고 안내). 한 조합은 대개 50~100건(요청 1~2번), 조합별 결과는 `nonTvSeasonCache`에 캐시하고 실패는 캐시하지 않는다. 일부 조합만 실패하면 나머지는 보여주고 요약에 실패 조합을 적는다. 인기도 순위는 **그때 불러온 작품 전체 안에서**의 순위다(`assignPopularityRanks`).
 - **처음 열 때(탭 클릭) 오늘이 속한 시즌 하나만** 자동으로 불러온다(AniList 요청 한도를 아끼려고 탭을 열기 전에는 부르지 않음). 시즌은 일본 방송 분기(겨울 1~3월/봄 4~6월/여름 7~9월/가을 10~12월, `resolveSeason`과 같은 기준)이다. 연도 목록은 내년~2000년.
+- **Hentai 장르 작품은 제외한다**(요청): AniList 목록 쿼리(요일별, 분기 신작 TV, ONA 등, 만화·소설 순위)에 서버 쪽 `genre_not_in: ["Hentai"]`(`EXCLUDED_GENRES_GQL`)를 건다. 직접 확인: ONA 등 탭에는 Hentai 작품이 시즌당 10~17건 섞여 있었고(2026 가을 55건 중 11건) TV/만화 목록에는 없었다. **사용자가 직접 입력하는 검색 탭은 거르지 않는다.** Kitsu/Jikan 목록에는 적용하지 않았다(ONA 탭이 AniList 전용이고 그쪽 TV 목록엔 해당 작품이 없었음).
 - **중국 제작 작품은 제외한다**(`EXCLUDED_ORIGIN_COUNTRIES = {'CN'}`, 요청). AniList에는 제작국 제외 필터가 없어 `countryOfOrigin`을 받아 클라이언트에서 거른다. 직접 확인: 인기 있는 중국 작품(donghua)은 AniList에 `season`/`seasonYear`가 비어 있어 시즌 조회에는 원래 잡히지 않고(5개 시즌 표본에 CN 0건), 요일별 TV 표본 72건도 전부 JP다. 한국(KR) 등 다른 국가는 제외하지 않는다.
 
 ### 만화·소설 순위(`getBookRanking` / `booksApp.js`) 핵심 로직과 한계
