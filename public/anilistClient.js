@@ -195,6 +195,68 @@
     return distribution.reduce((sum, entry) => sum + (Number(entry?.amount) || 0), 0);
   }
 
+  // ---- 방영 상태 판정 ----------------------------------------------------------
+  // 요일별 표의 일본어 타이틀 앞 색 점(초록=방영 중, 빨강=휴방/종료, 회색=확인 불가)에 쓰는 값.
+  // 실제 방송 일정을 주는 API가 없으므로 "다음 방송 예정일"과 "예상 종료일"로 추정한다.
+  const AIRING_SOON_DAYS = 14; // 이 안에 다음 방송이 있으면 방영 중으로 본다
+  const OVERDUE_GRACE_DAYS = 28; // 시작일+(회차-1)주가 이만큼 지나도 방영 중으로 남아 있으면 종료로 추정
+
+  function daysFromNow(ms) {
+    return (ms - Date.now()) / (24 * 60 * 60 * 1000);
+  }
+
+  // 시작일(YYYY-MM-DD)부터 매주 1화씩 방송했다고 가정한 예상 종료일이, 휴방 여유(28일)까지 지났는지.
+  function hasPassedExpectedEnd(startDate, episodeCount) {
+    const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(startDate || '');
+    if (!match || typeof episodeCount !== 'number' || episodeCount < 1) return false;
+    const expectedEndMs = Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3]) + (episodeCount - 1) * 7);
+    return daysFromNow(expectedEndMs) < -OVERDUE_GRACE_DAYS;
+  }
+
+  function describeNextBroadcast(nextMs) {
+    const days = daysFromNow(nextMs);
+    if (days > AIRING_SOON_DAYS) {
+      return { state: 'hiatus', reason: `휴방 중으로 보임 — 다음 방송이 약 ${Math.round(days)}일 뒤` };
+    }
+    return { state: 'airing', reason: '방영 중 — 다음 방송이 곧 예정됨' };
+  }
+
+  function resolveAiringState(media, syoboiEntry) {
+    const airingAt = media.nextAiringEpisode?.airingAt;
+    if (typeof airingAt === 'number') return describeNextBroadcast(airingAt * 1000);
+
+    if (syoboiEntry?.primary) return { state: 'airing', reason: '방영 중 — Syoboi에 이번 주 방송 편성이 있음' };
+    if (media.status === 'HIATUS') return { state: 'hiatus', reason: 'AniList 상태: 휴방 중' };
+    if (media.status === 'FINISHED' || media.status === 'CANCELLED') return { state: 'ended', reason: 'AniList 상태: 방영 종료' };
+    if (hasPassedExpectedEnd(formatFirstAirDate(media.startDate), media.episodes)) {
+      return { state: 'ended', reason: '예상 종료일(시작일 + 총 회차 주 수)이 지나 방영 종료로 추정' };
+    }
+    return { state: 'unknown', reason: '방영 중으로 등록돼 있으나 다음 방송 일정과 Syoboi 편성이 모두 없어 실제 방영 여부를 확인할 수 없음' };
+  }
+
+  // ---- Syoboi 편성 병합 -------------------------------------------------------
+  // AniList에는 TV 방송사 필드가 없어 broadcastStation이 비므로, 공용 모듈 syoboiSchedule.js가 읽는
+  // 정적 편성표(public/syoboi-schedule.js)를 일본어 제목(title.native)으로 매칭해 보충한다.
+  function loadSyoboiIndex() {
+    return window.SyoboiSchedule ? window.SyoboiSchedule.loadIndex() : Promise.resolve(null);
+  }
+
+  function findSyoboiEntry(syoboiIndex, media) {
+    if (!window.SyoboiSchedule) return null;
+    const title = media.title || {};
+    return window.SyoboiSchedule.findEntry(syoboiIndex, {
+      titles: [title.native, title.romaji, title.english].filter(Boolean),
+      startDate: formatFirstAirDate(media.startDate)
+    });
+  }
+
+  // AniList의 nextAiringEpisode는 특정 회차의 실제 방영 시각이라 값이 있으면 요일/시간은 그쪽을 우선한다.
+  function resolveBroadcastInfo(media, syoboiEntry) {
+    const slot = resolveBroadcastSlotFromAiringAt(media.nextAiringEpisode?.airingAt);
+    const base = { dayKorean: slot.dayKorean, timeText: slot.timeText, station: '정보 없음' };
+    return window.SyoboiSchedule ? window.SyoboiSchedule.mergeBroadcast(base, syoboiEntry) : base;
+  }
+
   function pickTitle(title) {
     return {
       titleJapanese: title?.native || title?.romaji || '정보 없음',
@@ -202,9 +264,10 @@
     };
   }
 
-  function mapToWeeklyItem(media) {
+  function mapToWeeklyItem(media, syoboiIndex) {
     const { titleJapanese, titleEnglish } = pickTitle(media.title);
-    const slot = resolveBroadcastSlotFromAiringAt(media.nextAiringEpisode?.airingAt);
+    const syoboiEntry = findSyoboiEntry(syoboiIndex, media);
+    const broadcast = resolveBroadcastInfo(media, syoboiEntry);
 
     return {
       titleJapanese,
@@ -212,9 +275,12 @@
       score: parseScore(media.averageScore),
       scoredBy: parseScoredBy(media.stats),
       favorites: typeof media.favourites === 'number' ? media.favourites : null,
-      broadcastDayKorean: slot.dayKorean,
-      broadcastTime: slot.timeText,
-      broadcastStation: '정보 없음',
+      anilistId: media.id,
+      firstAirDate: formatFirstAirDate(media.startDate),
+      airingState: resolveAiringState(media, syoboiEntry),
+      broadcastDayKorean: broadcast.dayKorean,
+      broadcastTime: broadcast.timeText,
+      broadcastStation: broadcast.station,
       officialSite: media.siteUrl || null,
       category: formatCategory(media.format),
       genres: media.genres || [],
@@ -240,8 +306,9 @@
     };
   }
 
-  function mapToSearchItem(media) {
+  function mapToSearchItem(media, syoboiIndex) {
     const { titleJapanese, titleEnglish } = pickTitle(media.title);
+    const broadcast = resolveBroadcastInfo(media, findSyoboiEntry(syoboiIndex, media));
 
     return {
       titleJapanese,
@@ -249,10 +316,11 @@
       score: parseScore(media.averageScore),
       scoredBy: parseScoredBy(media.stats),
       favorites: typeof media.favourites === 'number' ? media.favourites : null,
+      anilistId: media.id,
       firstAirDate: formatFirstAirDate(media.startDate),
-      broadcastTime: formatBroadcastLabel(media.nextAiringEpisode?.airingAt),
+      broadcastTime: broadcast.dayKorean && broadcast.timeText ? `${broadcast.dayKorean} ${broadcast.timeText}` : '정보 없음',
       episodes: typeof media.episodes === 'number' ? media.episodes : null,
-      broadcastStation: '정보 없음',
+      broadcastStation: broadcast.station,
       officialSite: media.siteUrl || null,
       category: formatCategory(media.format),
       genres: media.genres || [],
@@ -321,6 +389,10 @@
       Page(page: $page, perPage: $perPage) {
         pageInfo { hasNextPage }
         media(status: RELEASING, type: ANIME, format: TV, sort: POPULARITY_DESC) {
+          id
+          status
+          episodes
+          startDate { year month day }
           title { romaji english native }
           format
           genres
@@ -359,6 +431,7 @@
     query($q: String, $perPage: Int) {
       Page(page: 1, perPage: $perPage) {
         media(search: $q, type: ANIME) {
+          id
           title { romaji english native }
           format
           genres
@@ -398,6 +471,100 @@
   // 에러로 대체한다. 다른 소스(Jikan/Kitsu)를 대신 호출하지 않는다 — 어떤 API를 쓸지는
   // 화면 상단 소스 선택 버튼으로 사용자가 직접 고른다.
 
+  // ---- 평점 변화 이력 ----------------------------------------------------------
+  // AniList의 MediaTrend(Page.mediaTrends)는 작품별로 '하루에 한 번'(일본 시간 0시 기준)
+  // 찍힌 averageScore 스냅샷을 준다(직접 확인). 시/분 단위 이력은 없으므로, "방송 시각 + 6시간"
+  // 이후 처음 찍힌 하루 단위 스냅샷을 그 회차의 평점으로 쓴다. 즉 실제로는 방송 다음 날 0시
+  // 스냅샷이 선택된다. 데이터는 2014-12 이후부터만 존재하고, 값이 null인 날은 그래프에서 뺀다.
+  const SCORE_HISTORY_AFTER_BROADCAST_HOURS = 6;
+  const SCORE_HISTORY_PAGE_SIZE = 50;
+  const SCORE_HISTORY_MAX_PAGES = 8;
+  const SCORE_HISTORY_MAX_DAYS = SCORE_HISTORY_PAGE_SIZE * SCORE_HISTORY_MAX_PAGES; // 한 번에 가져올 최대 기간
+  const DAY_MS = 24 * 60 * 60 * 1000;
+  const JST_OFFSET_MS = 9 * 60 * 60 * 1000;
+
+  const SCORE_HISTORY_QUERY = `
+    query($mediaId: Int, $dateGreater: Int, $page: Int, $perPage: Int) {
+      Page(page: $page, perPage: $perPage) {
+        pageInfo { hasNextPage }
+        mediaTrends(mediaId: $mediaId, sort: DATE, date_greater: $dateGreater) {
+          date
+          averageScore
+        }
+      }
+    }
+  `;
+
+  // firstAirDate: 'YYYY-MM-DD'(일본 방영 시작일), broadcastTime: '25:30' 같은 30시간제 'HH:MM'.
+  // 방영 시작일부터 7일 간격으로 "방송 시각 + 6시간"인 시점(JST)을 만들어 현재까지만 돌려준다.
+  function buildWeeklySampleTimes(firstAirDate, broadcastTime, nowMs) {
+    const dateMatch = /^(\d{4})-(\d{2})-(\d{2})$/.exec(firstAirDate || '');
+    if (!dateMatch) return [];
+
+    const [, y, m, d] = dateMatch.map(Number);
+    const timeMatch = /(\d{1,2}):(\d{2})/.exec(broadcastTime || ''); // '25:30' 또는 검색 결과의 '금 25:30' 둘 다 허용
+    const hours = timeMatch ? Number(timeMatch[1]) : 0;
+    const minutes = timeMatch ? Number(timeMatch[2]) : 0;
+
+    const samples = [];
+    for (let week = 0; week < 520; week += 1) {
+      // Date.UTC에 JST 기준 날짜/시각을 그대로 넣고 9시간을 빼면 실제 UTC 시각이 된다.
+      const airedAtMs = Date.UTC(y, m - 1, d + week * 7, hours, minutes) - JST_OFFSET_MS;
+      const sampleMs = airedAtMs + SCORE_HISTORY_AFTER_BROADCAST_HOURS * 60 * 60 * 1000;
+      if (sampleMs > nowMs) break;
+      samples.push({ week: week + 1, airedAtMs, sampleMs });
+    }
+    return samples;
+  }
+
+  function formatJstDate(ms) {
+    return formatDate(new Date(ms + JST_OFFSET_MS));
+  }
+
+  async function getScoreHistory(mediaId, firstAirDate, broadcastTime) {
+    if (!mediaId) throw new Error('AniList 작품 ID가 없어 평점 이력을 조회할 수 없습니다.');
+
+    const nowMs = Date.now();
+    const allSamples = buildWeeklySampleTimes(firstAirDate, broadcastTime, nowMs);
+    if (allSamples.length === 0) {
+      throw new Error('방영 시작일 정보가 없거나 아직 방영 전이라 평점 이력을 만들 수 없습니다.');
+    }
+
+    // 한 번에 가져올 수 있는 기간(SCORE_HISTORY_MAX_DAYS)보다 오래된 장기 방영작은 최근 구간만 쓴다.
+    const earliestMs = nowMs - SCORE_HISTORY_MAX_DAYS * DAY_MS;
+    const samples = allSamples.filter((sample) => sample.sampleMs >= earliestMs);
+    const truncated = samples.length < allSamples.length;
+    if (samples.length === 0) throw new Error('조회 가능한 기간에 해당하는 방송 회차가 없습니다.');
+
+    const dateGreater = Math.floor((samples[0].sampleMs - DAY_MS) / 1000);
+    const trends = [];
+    for (let page = 1; page <= SCORE_HISTORY_MAX_PAGES; page += 1) {
+      const data = await gqlRequest(SCORE_HISTORY_QUERY, {
+        mediaId,
+        dateGreater,
+        page,
+        perPage: SCORE_HISTORY_PAGE_SIZE
+      });
+      trends.push(...(data?.Page?.mediaTrends || []));
+      if (!data?.Page?.pageInfo?.hasNextPage) break;
+    }
+
+    // 하루 단위 스냅샷(date, epoch초) 중 각 방송 시점 이후 처음 것을 고른다.
+    const points = [];
+    samples.forEach((sample) => {
+      const snapshot = trends.find((trend) => trend.date * 1000 >= sample.sampleMs);
+      if (!snapshot || typeof snapshot.averageScore !== 'number') return;
+      points.push({
+        week: sample.week,
+        airedDate: formatJstDate(sample.airedAtMs),
+        snapshotDate: formatJstDate(snapshot.date * 1000),
+        score: snapshot.averageScore
+      });
+    });
+
+    return { points, truncated, totalWeeks: allSamples.length };
+  }
+
   async function getWeeklyRatings(endDate) {
     const { startDate, endDate: normalizedEndDate } = getBroadcastWeekRange(endDate);
 
@@ -408,7 +575,8 @@
         throw new Error('AniList에서 현재 방영 중인 애니메이션 데이터를 찾을 수 없습니다.');
       }
 
-      const items = assignPopularityRanks(mediaList.map(mapToWeeklyItem));
+      const syoboiIndex = await loadSyoboiIndex();
+      const items = assignPopularityRanks(mediaList.map((media) => mapToWeeklyItem(media, syoboiIndex)));
       const { days, unscheduled } = buildWeeklyRatingDays(startDate, normalizedEndDate, items);
 
       return { source: 'anilist', period: { startDate, endDate: normalizedEndDate }, days, unscheduled };
@@ -445,7 +613,8 @@
     try {
       const data = await gqlRequest(SEARCH_QUERY, { q: query, perPage: SEARCH_RESULT_LIMIT });
       const mediaList = data?.Page?.media || [];
-      const results = assignPopularityRanks(mediaList.map(mapToSearchItem));
+      const syoboiIndex = await loadSyoboiIndex();
+      const results = assignPopularityRanks(mediaList.map((media) => mapToSearchItem(media, syoboiIndex)));
 
       return { source: 'anilist', query, results };
     } catch (error) {
@@ -496,6 +665,7 @@
     getWeeklyRatings,
     getNewReleases,
     searchAnimeByTitle,
-    checkStatus
+    checkStatus,
+    getScoreHistory
   };
 })();

@@ -184,6 +184,7 @@ const SORT_FIELD_LABELS = {
   scoredBy: '평가 참여자 수',
   popularityRank: '인기도 순위',
   favorites: '즐겨찾기 수',
+  firstAirDate: '방영 시작일',
   broadcastDayKorean: '방영일'
 };
 
@@ -196,6 +197,7 @@ const SORT_DEFAULT_DIRECTION = {
   scoredBy: 'desc',
   popularityRank: 'asc',
   favorites: 'desc',
+  firstAirDate: 'asc',
   broadcastDayKorean: 'asc'
 };
 
@@ -254,6 +256,193 @@ function setLoading(isLoading) {
 function createCell(text) {
   const td = document.createElement('td');
   td.textContent = text ?? '정보 없음';
+  return td;
+}
+
+// ---- 평점 변화 그래프(마우스 오버 팝업) ---------------------------------------
+// 평점에 마우스를 올리면 방영 시작일부터 현재까지 "방송 시각 + 6시간" 시점의 주 1회 평점을
+// 꺾은선으로 보여준다. 이력은 AniList(MediaTrend)만 제공하므로(AniListClient.getScoreHistory)
+// AniList 항목(item.anilistId)이 아니면 안내 문구만 띄운다. 같은 작품은 한 번만 조회한다.
+const SCORE_HISTORY_HOVER_DELAY_MS = 300;
+const scoreHistoryCache = new Map();
+let scoreHistoryTimer = null;
+let scoreHistoryToken = 0;
+let scoreHistoryPopup = null;
+
+function getScoreHistoryPopup() {
+  if (!scoreHistoryPopup) {
+    scoreHistoryPopup = document.createElement('div');
+    scoreHistoryPopup.className = 'score-history-popup hidden';
+    document.body.appendChild(scoreHistoryPopup);
+  }
+  return scoreHistoryPopup;
+}
+
+function loadScoreHistory(item) {
+  const key = `${item.anilistId}|${item.firstAirDate}|${item.broadcastTime}`;
+  if (!scoreHistoryCache.has(key)) {
+    const promise = window.AniListClient.getScoreHistory(item.anilistId, item.firstAirDate, item.broadcastTime);
+    // 실패한 결과는 캐시에 남기지 않아 다음 마우스 오버에서 다시 시도한다.
+    promise.catch(() => scoreHistoryCache.delete(key));
+    scoreHistoryCache.set(key, promise);
+  }
+  return scoreHistoryCache.get(key);
+}
+
+function createSvgElement(name, attributes = {}) {
+  const el = document.createElementNS('http://www.w3.org/2000/svg', name);
+  Object.entries(attributes).forEach(([key, value]) => el.setAttribute(key, value));
+  return el;
+}
+
+// AniList averageScore는 0~100이라, 표의 평점 칸(10점 만점)과 같은 눈금으로 보이게 10으로 나눈다.
+function createScoreChart(points) {
+  const width = 360;
+  const height = 180;
+  const pad = { left: 34, right: 12, top: 12, bottom: 26 };
+  const values = points.map((point) => point.score / 10);
+  const rawMin = Math.min(...values);
+  const rawMax = Math.max(...values);
+  const margin = Math.max(0.2, (rawMax - rawMin) * 0.2);
+  const yMin = Math.floor((rawMin - margin) * 10) / 10;
+  const yMax = Math.ceil((rawMax + margin) * 10) / 10;
+  const innerWidth = width - pad.left - pad.right;
+  const xAt = (index) => (points.length === 1 ? pad.left + innerWidth / 2 : pad.left + (innerWidth * index) / (points.length - 1));
+  const yAt = (value) => pad.top + ((height - pad.top - pad.bottom) * (yMax - value)) / (yMax - yMin);
+
+  const svg = createSvgElement('svg', { viewBox: `0 0 ${width} ${height}`, class: 'score-chart', role: 'img' });
+
+  [yMin, (yMin + yMax) / 2, yMax].forEach((tick) => {
+    svg.appendChild(createSvgElement('line', { x1: pad.left, x2: width - pad.right, y1: yAt(tick), y2: yAt(tick), class: 'score-chart-grid' }));
+    const label = createSvgElement('text', { x: pad.left - 4, y: yAt(tick) + 3, class: 'score-chart-label', 'text-anchor': 'end' });
+    label.textContent = tick.toFixed(1);
+    svg.appendChild(label);
+  });
+
+  // 가로축에는 첫 방송일과 마지막 방송일만 표시한다(MM/DD).
+  const formatShortDate = (date) => date.slice(5).replace('-', '/');
+  const labelIndexes = points.length === 1 ? [0] : [0, points.length - 1];
+  labelIndexes.forEach((index) => {
+    const label = createSvgElement('text', { x: xAt(index), y: height - 8, class: 'score-chart-label', 'text-anchor': index === 0 && points.length > 1 ? 'start' : 'end' });
+    label.textContent = formatShortDate(points[index].airedDate);
+    svg.appendChild(label);
+  });
+
+  svg.appendChild(createSvgElement('polyline', {
+    points: points.map((point, index) => `${xAt(index)},${yAt(point.score / 10)}`).join(' '),
+    class: 'score-chart-line'
+  }));
+
+  points.forEach((point, index) => {
+    const dot = createSvgElement('circle', { cx: xAt(index), cy: yAt(point.score / 10), r: 3, class: 'score-chart-dot' });
+    const tip = createSvgElement('title');
+    tip.textContent = `${point.week}화 · ${point.airedDate} 방송 → ${point.snapshotDate} 스냅샷: ${(point.score / 10).toFixed(1)}`;
+    dot.appendChild(tip);
+    svg.appendChild(dot);
+  });
+
+  return svg;
+}
+
+function fillScoreHistoryPopup(popup, item, state) {
+  popup.replaceChildren();
+
+  const title = document.createElement('p');
+  title.className = 'score-history-title';
+  title.textContent = `${item.titleJapanese || item.titleEnglish} — 평점 변화`;
+  popup.appendChild(title);
+
+  if (state.message) {
+    const message = document.createElement('p');
+    message.className = 'score-history-message';
+    message.textContent = state.message;
+    popup.appendChild(message);
+    return;
+  }
+
+  popup.appendChild(createScoreChart(state.result.points));
+
+  const { points, truncated, totalWeeks } = state.result;
+  const last = points[points.length - 1];
+  const note = document.createElement('p');
+  note.className = 'score-history-note';
+  note.textContent = `방송 시각+6시간 기준 주 1회(${points.length}회), 최근 ${(last.score / 10).toFixed(1)}점. `
+    + 'AniList는 하루 단위 스냅샷이라 방송 다음 날 0시 값입니다.'
+    + (truncated ? ` 방영 ${totalWeeks}주 중 최근 구간만 표시합니다.` : '');
+  popup.appendChild(note);
+}
+
+function positionScoreHistoryPopup(popup, anchor) {
+  const rect = anchor.getBoundingClientRect();
+  popup.style.left = '0px';
+  popup.style.top = '0px';
+  const width = popup.offsetWidth;
+  const height = popup.offsetHeight;
+  const left = Math.max(8, Math.min(rect.left, window.innerWidth - width - 8));
+  const below = rect.bottom + 6;
+  const top = below + height > window.innerHeight - 8 ? Math.max(8, rect.top - height - 6) : below;
+  popup.style.left = `${left}px`;
+  popup.style.top = `${top}px`;
+}
+
+async function showScoreHistory(anchor, item) {
+  const popup = getScoreHistoryPopup();
+  scoreHistoryToken += 1;
+  const token = scoreHistoryToken;
+  const render = (state) => {
+    if (token !== scoreHistoryToken) return; // 그 사이 다른 평점으로 옮겼거나 팝업이 닫힘
+    fillScoreHistoryPopup(popup, item, state);
+    popup.classList.remove('hidden');
+    positionScoreHistoryPopup(popup, anchor);
+  };
+
+  if (!item.anilistId || !window.AniListClient?.getScoreHistory) {
+    render({ message: '평점 변화 이력은 AniList 데이터 소스에서만 제공됩니다(Kitsu/Jikan은 현재 평점만 제공).' });
+    return;
+  }
+
+  render({ message: '평점 이력을 불러오는 중입니다…' });
+  try {
+    const result = await loadScoreHistory(item);
+    render(result.points.length > 0
+      ? { result }
+      : { message: '이 작품은 AniList에 기록된 평점 이력이 없습니다.' });
+  } catch (error) {
+    render({ message: `평점 이력을 불러오지 못했습니다: ${error.message}` });
+  }
+}
+
+function hideScoreHistory() {
+  clearTimeout(scoreHistoryTimer);
+  scoreHistoryToken += 1;
+  if (scoreHistoryPopup) scoreHistoryPopup.classList.add('hidden');
+}
+
+function attachScoreHistory(el, item) {
+  el.classList.add('score-hover');
+  el.tabIndex = 0;
+  el.addEventListener('mouseenter', () => {
+    clearTimeout(scoreHistoryTimer);
+    scoreHistoryTimer = setTimeout(() => showScoreHistory(el, item), SCORE_HISTORY_HOVER_DELAY_MS);
+  });
+  el.addEventListener('mouseleave', hideScoreHistory);
+  el.addEventListener('focus', () => showScoreHistory(el, item));
+  el.addEventListener('blur', hideScoreHistory);
+  // 터치 화면은 hover가 없어 탭으로도 열 수 있게 한다.
+  el.addEventListener('click', (event) => {
+    event.stopPropagation();
+    showScoreHistory(el, item);
+  });
+}
+
+document.addEventListener('click', hideScoreHistory);
+document.addEventListener('keydown', (event) => {
+  if (event.key === 'Escape') hideScoreHistory();
+});
+
+function createScoreCell(item) {
+  const td = createCell(typeof item.score === 'number' ? item.score.toFixed(2) : '정보 없음');
+  attachScoreHistory(td, item);
   return td;
 }
 
@@ -351,11 +540,22 @@ function createTagListDetailField(item) {
 // 스크롤해주므로 전체 내용에 접근하는 길은 남아 있다. contentWidth를 넘기면
 // 칸이 별도 <colgroup>으로 폭을 강제하지 않는 표(신작 탭)에서도 span 자체가
 // 폭을 고정해 똑같이 동작한다. 전체 텍스트는 title 속성(마우스 오버)으로도 볼 수 있다.
-function createTitleCell(text, contentWidth) {
+// 일본어 타이틀 앞에 방영 상태 색 점을 붙인다(초록=방영 중, 빨강=휴방/종료, 회색=확인 불가).
+// airingState는 각 클라이언트가 추정해 채운 { state, reason }이며, 없으면(Mock 등) 점을 그리지 않는다.
+function createAiringStateDot(airingState) {
+  const dot = document.createElement('span');
+  const colorClass = { airing: 'airing', hiatus: 'stopped', ended: 'stopped', unknown: 'unknown' }[airingState.state] || 'unknown';
+  dot.className = `status-dot status-dot-${colorClass}`;
+  dot.title = airingState.reason;
+  return dot;
+}
+
+function createTitleCell(text, contentWidth, airingState) {
   const td = document.createElement('td');
   const span = document.createElement('span');
   span.className = 'title-scroll';
-  span.textContent = text || '정보 없음';
+  if (airingState) span.appendChild(createAiringStateDot(airingState));
+  span.appendChild(document.createTextNode(text || '정보 없음'));
   span.title = text || '정보 없음';
   if (contentWidth) span.style.maxWidth = `${contentWidth}px`;
   td.appendChild(span);
@@ -397,6 +597,11 @@ function createNumberCell(value) {
 const BROADCAST_DAY_ORDER = { 일: 0, 월: 1, 화: 2, 수: 3, 목: 4, 금: 5, 토: 6 };
 
 function getSortValue(item, field) {
+  // 방영 시작일은 'YYYY-MM-DD' 문자열(또는 '미정' 등)이라 유효한 날짜만 UTC 밀리초로 바꿔 비교한다.
+  if (field === 'firstAirDate') {
+    const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(item.firstAirDate || '');
+    return match ? Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3])) : null;
+  }
   if (field === 'broadcastDayKorean') {
     const order = BROADCAST_DAY_ORDER[item.broadcastDayKorean];
     return typeof order === 'number' ? order : null;
@@ -442,6 +647,7 @@ const RATING_COLUMNS = [
   { label: '평가 참여자 수', getText: (item) => (typeof item.scoredBy === 'number' ? item.scoredBy.toLocaleString('ko-KR') : '정보 없음'), minWidth: 50 },
   { label: '인기도 순위', getText: (item) => (typeof item.popularityRank === 'number' ? `#${item.popularityRank}` : '정보 없음'), minWidth: 50 },
   { label: '즐겨찾기 수', getText: (item) => (typeof item.favorites === 'number' ? item.favorites.toLocaleString('ko-KR') : '정보 없음'), minWidth: 50 },
+  { label: '방영 시작일', getText: (item) => item.firstAirDate || '정보 없음', minWidth: 80 },
   { label: '방영일', getText: (item) => item.broadcastDayKorean || '정보 없음', minWidth: 50 },
   { label: '방송시간', getText: (item) => `${item.broadcastTime || '정보 없음'}${isLateNightBroadcast(item.broadcastTime) ? ' 심야' : ''}`, minWidth: 60 },
   { label: '방송사', getText: (item) => item.broadcastStation || '정보 없음', minWidth: 60 },
@@ -513,6 +719,7 @@ const RATING_SORTABLE_HEADERS = [
   { label: '평가 참여자 수' },
   { label: '인기도 순위', sortField: 'popularityRank' },
   { label: '즐겨찾기 수' },
+  { label: '방영 시작일', sortField: 'firstAirDate' },
   { label: '방영일', sortField: 'broadcastDayKorean' },
   { label: '방송시간' },
   { label: '방송사' },
@@ -577,13 +784,14 @@ function createRatingRow(item, index, columnWidths) {
   const cells = [
     createCell(index + 1),
     createCoverCell(item.coverImage, item.titleEnglish || item.titleJapanese),
-    createTitleCell(item.titleJapanese, titleContentWidth),
+    createTitleCell(item.titleJapanese, titleContentWidth, item.airingState),
     createTitleCell(item.titleEnglish, titleContentWidth),
     createTagListCell(item),
-    createCell(typeof item.score === 'number' ? item.score.toFixed(2) : '정보 없음'),
+    createScoreCell(item),
     createNumberCell(item.scoredBy),
     createCell(typeof item.popularityRank === 'number' ? `#${item.popularityRank}` : '정보 없음'),
     createNumberCell(item.favorites),
+    createCell(item.firstAirDate),
     createCell(item.broadcastDayKorean),
     createBroadcastTimeCell(item.broadcastTime),
     createCell(item.broadcastStation),
@@ -777,7 +985,9 @@ function createAnimeCard(item) {
   const grid = document.createElement('dl');
   grid.className = 'anime-card-grid';
   grid.appendChild(createTagListDetailField(item));
-  grid.appendChild(createDetailField('평점', typeof item.score === 'number' ? item.score.toFixed(2) : '정보 없음'));
+  const scoreField = createDetailField('평점', typeof item.score === 'number' ? item.score.toFixed(2) : '정보 없음');
+  attachScoreHistory(scoreField.querySelector('dd'), item);
+  grid.appendChild(scoreField);
   grid.appendChild(createDetailField('평가 참여자 수', typeof item.scoredBy === 'number' ? item.scoredBy.toLocaleString('ko-KR') : '정보 없음'));
   grid.appendChild(createDetailField('인기도 순위', typeof item.popularityRank === 'number' ? `#${item.popularityRank}` : '정보 없음'));
   grid.appendChild(createDetailField('즐겨찾기 수', typeof item.favorites === 'number' ? item.favorites.toLocaleString('ko-KR') : '정보 없음'));

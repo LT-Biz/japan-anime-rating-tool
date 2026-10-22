@@ -35,10 +35,10 @@
     TV: 'TV', MOVIE: '극장판', OVA: 'OVA', ONA: 'ONA', SPECIAL: '스페셜', MUSIC: '뮤직'
   };
 
-  const KITSU_PAGE_SIZE = 20; // Kitsu page[limit] 최대값(그 이상 요청하면 400 에러)
+  const KITSU_PAGE_SIZE = 10; // 20(최대값)으로 받으면 offset 20 구간이 앞 페이지와 중복돼 일부 누락되는 현상이 있어 10으로 받는다(Kitsu page[limit]은 20 초과 시 400 에러)
   const PAGE_INTERVAL_MS = 350;
-  const WEEKLY_MAX_PAGES = 12;
-  const NEW_RELEASES_MAX_PAGES = 12;
+  const WEEKLY_MAX_PAGES = 40;
+  const NEW_RELEASES_MAX_PAGES = 20;
   const SEARCH_RESULT_LIMIT = 10;
   const STATUS_CHECK_TIMEOUT_MS = 6000;
 
@@ -88,22 +88,6 @@
     return { year, season: 'fall' };
   }
 
-  // 기준 날짜가 속한 분기(계절)의 달력상 시작일~종료일을 계산한다. Kitsu는
-  // filter[startDate] 범위 필터를 지원하지 않아(직접 확인: 400 Filter not allowed)
-  // 후보를 넓게 가져온 뒤 이 범위로 클라이언트에서 걸러낸다.
-  function getQuarterRange(dateStr) {
-    const [y] = dateStr.split('-').map(Number);
-    const { season } = resolveSeason(new Date(`${dateStr}T00:00:00Z`));
-    const ranges = {
-      winter: [`${y}-01-01`, `${y}-03-31`],
-      spring: [`${y}-04-01`, `${y}-06-30`],
-      summer: [`${y}-07-01`, `${y}-09-30`],
-      fall: [`${y}-10-01`, `${y}-12-31`]
-    };
-    const [start, end] = ranges[season];
-    return { startDate: start, endDate: end };
-  }
-
   /**
    * Jikan의 broadcast.day/time과 달리 Kitsu는 다음 방영 시각(nextRelease)을
    * 타임존 오프셋이 포함된 ISO 문자열로 준다(예: "2026-09-20T09:30:00.000+09:00").
@@ -127,14 +111,6 @@
     }
 
     return { dayKorean: KOREAN_DAY_LABELS[dow], timeText: `${hh}:${mm}` };
-  }
-
-  function formatBroadcastLabel(nextRelease) {
-    const slot = resolveBroadcastSlotFromNextRelease(nextRelease);
-    if (slot.dayKorean && slot.timeText) {
-      return `${slot.dayKorean} ${slot.timeText}`;
-    }
-    return '정보 없음';
   }
 
   // popularityRank(낮을수록 인기) 기준 오름차순 정렬. 값이 없는 항목은 뒤로.
@@ -227,6 +203,7 @@
     const collectedIncluded = [];
     const seenIds = new Set();
     let offset = 0;
+    let total = null;
 
     for (let page = 0; page < maxPages; page += 1) {
       if (page > 0) await sleep(PAGE_INTERVAL_MS);
@@ -239,12 +216,12 @@
       collectedData.push(...newItems);
       collectedIncluded.push(...(response?.included || []));
 
-      const total = response?.meta?.count ?? offset + pageData.length;
+      total = response?.meta?.count ?? offset + pageData.length;
       offset += KITSU_PAGE_SIZE;
       if (offset >= total) break;
     }
 
-    return { data: dedupeById(collectedData), included: collectedIncluded };
+    return { data: dedupeById(collectedData), included: collectedIncluded, total };
   }
 
   // JSON:API의 included 배열을 'type:id' 키로 바로 찾을 수 있게 인덱싱한다.
@@ -343,10 +320,74 @@
     };
   }
 
-  function mapToWeeklyItem(anime, includedIndex) {
+  // ---- Syoboi 편성 병합 -------------------------------------------------------
+  // Kitsu는 방영 요일/시간/방송국을 거의 채우지 못하므로, 공용 모듈 syoboiSchedule.js가 읽는
+  // 정적 편성표(public/syoboi-schedule.js)를 일본어 제목으로 매칭해 보충한다.
+  function loadSyoboiIndex() {
+    return window.SyoboiSchedule ? window.SyoboiSchedule.loadIndex() : Promise.resolve(null);
+  }
+
+  function findSyoboiEntry(syoboiIndex, attrs) {
+    if (!window.SyoboiSchedule) return null;
+    const titles = attrs.titles || {};
+    return window.SyoboiSchedule.findEntry(syoboiIndex, {
+      titles: [titles.ja_jp, titles.en_jp, titles.en, attrs.canonicalTitle].filter(Boolean),
+      startDate: attrs.startDate
+    });
+  }
+
+  // Kitsu의 nextRelease는 특정 회차의 실제 방영 시각이라 값이 있으면 요일/시간은 그쪽을 우선한다.
+  function resolveBroadcastInfo(attrs, anime, includedIndex, syoboiEntry) {
+    const kitsuSlot = resolveBroadcastSlotFromNextRelease(attrs.nextRelease);
+    const base = { dayKorean: kitsuSlot.dayKorean, timeText: kitsuSlot.timeText, station: extractBroadcastStation(anime, includedIndex) };
+    return window.SyoboiSchedule ? window.SyoboiSchedule.mergeBroadcast(base, syoboiEntry) : base;
+  }
+
+  // ---- 방영 상태 판정 ----------------------------------------------------------
+  // 요일별 표의 일본어 타이틀 앞 색 점(초록=방영 중, 빨강=휴방/종료, 회색=확인 불가)에 쓰는 값.
+  // 실제 방송 일정을 주는 API가 없으므로 "다음 방송 예정일"과 "예상 종료일"로 추정한다.
+  const AIRING_SOON_DAYS = 14; // 이 안에 다음 방송이 있으면 방영 중으로 본다
+  const OVERDUE_GRACE_DAYS = 28; // 시작일+(회차-1)주가 이만큼 지나도 방영 중으로 남아 있으면 종료로 추정
+
+  function daysFromNow(ms) {
+    return (ms - Date.now()) / (24 * 60 * 60 * 1000);
+  }
+
+  // 시작일(YYYY-MM-DD)부터 매주 1화씩 방송했다고 가정한 예상 종료일이, 휴방 여유(28일)까지 지났는지.
+  function hasPassedExpectedEnd(startDate, episodeCount) {
+    const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(startDate || '');
+    if (!match || typeof episodeCount !== 'number' || episodeCount < 1) return false;
+    const expectedEndMs = Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3]) + (episodeCount - 1) * 7);
+    return daysFromNow(expectedEndMs) < -OVERDUE_GRACE_DAYS;
+  }
+
+  function describeNextBroadcast(nextMs) {
+    const days = daysFromNow(nextMs);
+    if (days > AIRING_SOON_DAYS) {
+      return { state: 'hiatus', reason: `휴방 중으로 보임 — 다음 방송이 약 ${Math.round(days)}일 뒤` };
+    }
+    return { state: 'airing', reason: '방영 중 — 다음 방송이 곧 예정됨' };
+  }
+
+  // Kitsu의 attributes.status는 이미 끝난 작품도 'current'로 남겨두는 경우가 많아(직접 확인)
+  // 그대로 믿지 않고, 다음 방송 시각(nextRelease) → Syoboi의 이번 주 편성 → 예상 종료일 순으로 본다.
+  function resolveAiringState(attrs, syoboiEntry) {
+    const nextMs = Date.parse(attrs.nextRelease || '');
+    if (Number.isFinite(nextMs) && daysFromNow(nextMs) > -2) return describeNextBroadcast(nextMs);
+
+    if (syoboiEntry?.primary) return { state: 'airing', reason: '방영 중 — Syoboi에 이번 주 방송 편성이 있음' };
+    if (attrs.status === 'finished') return { state: 'ended', reason: 'Kitsu 상태: 방영 종료' };
+    if (hasPassedExpectedEnd(attrs.startDate, attrs.episodeCount)) {
+      return { state: 'ended', reason: '예상 종료일(시작일 + 총 회차 주 수)이 지나 방영 종료로 추정' };
+    }
+    return { state: 'unknown', reason: '다음 방송 일정과 Syoboi 편성이 모두 없어 실제 방영 여부를 확인할 수 없음' };
+  }
+
+  function mapToWeeklyItem(anime, includedIndex, syoboiIndex) {
     const attrs = anime.attributes;
     const { titleJapanese, titleEnglish } = extractTitles(attrs);
-    const slot = resolveBroadcastSlotFromNextRelease(attrs.nextRelease);
+    const syoboiEntry = findSyoboiEntry(syoboiIndex, attrs);
+    const broadcast = resolveBroadcastInfo(attrs, anime, includedIndex, syoboiEntry);
 
     return {
       titleJapanese,
@@ -355,9 +396,11 @@
       scoredBy: parseScoredBy(attrs),
       popularityRank: typeof attrs.popularityRank === 'number' ? attrs.popularityRank : null,
       favorites: typeof attrs.favoritesCount === 'number' ? attrs.favoritesCount : null,
-      broadcastDayKorean: slot.dayKorean,
-      broadcastTime: slot.timeText,
-      broadcastStation: extractBroadcastStation(anime, includedIndex),
+      firstAirDate: attrs.startDate || '미정',
+      airingState: resolveAiringState(attrs, syoboiEntry),
+      broadcastDayKorean: broadcast.dayKorean,
+      broadcastTime: broadcast.timeText,
+      broadcastStation: broadcast.station,
       officialSite: officialSiteFor(attrs),
       category: formatCategory(attrs.subtype),
       genres: extractGenres(anime, includedIndex),
@@ -383,9 +426,10 @@
     };
   }
 
-  function mapToSearchItem(anime, includedIndex) {
+  function mapToSearchItem(anime, includedIndex, syoboiIndex) {
     const attrs = anime.attributes;
     const { titleJapanese, titleEnglish } = extractTitles(attrs);
+    const broadcast = resolveBroadcastInfo(attrs, anime, includedIndex, findSyoboiEntry(syoboiIndex, attrs));
 
     return {
       titleJapanese,
@@ -395,9 +439,9 @@
       popularityRank: typeof attrs.popularityRank === 'number' ? attrs.popularityRank : null,
       favorites: typeof attrs.favoritesCount === 'number' ? attrs.favoritesCount : null,
       firstAirDate: attrs.startDate || '미정',
-      broadcastTime: formatBroadcastLabel(attrs.nextRelease),
+      broadcastTime: broadcast.dayKorean && broadcast.timeText ? `${broadcast.dayKorean} ${broadcast.timeText}` : '정보 없음',
       episodes: typeof attrs.episodeCount === 'number' ? attrs.episodeCount : null,
-      broadcastStation: extractBroadcastStation(anime, includedIndex),
+      broadcastStation: broadcast.station,
       officialSite: officialSiteFor(attrs),
       category: formatCategory(attrs.subtype),
       genres: extractGenres(anime, includedIndex),
@@ -414,18 +458,42 @@
     const { startDate, endDate: normalizedEndDate } = getBroadcastWeekRange(endDate);
 
     try {
-      const { data, included } = await fetchKitsuAllPages(
+      const includeParam = 'animeProductions.producer,genres,categories';
+      const statusResult = await fetchKitsuAllPages(
         '/anime',
-        { 'filter[status]': 'current', 'filter[subtype]': 'TV', include: 'animeProductions.producer,genres,categories' },
+        { 'filter[status]': 'current', 'filter[subtype]': 'TV', include: includeParam },
         WEEKLY_MAX_PAGES
       );
 
-      if (data.length === 0) {
+      if (statusResult.data.length === 0) {
         throw new Error('Kitsu에서 현재 방영 중인 애니메이션 데이터를 찾을 수 없습니다.');
       }
 
+      if (typeof statusResult.total === 'number' && statusResult.data.length < statusResult.total) {
+        console.warn(`[kitsuClient] getWeeklyRatings: Kitsu 총 ${statusResult.total}건 중 ${statusResult.data.length}건만 수집됨(페이지네이션 누락 가능).`);
+      }
+
+      // filter[status]=current 목록에는 attributes.status가 'current'인데도 빠지는 작품이 있다(예:
+      // 桃源暗鬼 日光・華厳の滝編 — 직접 확인). 이번 분기 시즌 필터 결과(전체 상태)에서 status가
+      // 'current'인 항목을 합쳐 이 누락을 메운다. 시즌 조회가 실패해도 기존 목록만으로 계속 진행한다.
+      let { data, included } = statusResult;
+      try {
+        const { year, season } = resolveSeason(new Date(`${normalizedEndDate}T00:00:00Z`));
+        const seasonResult = await fetchKitsuAllPages(
+          '/anime',
+          { 'filter[season]': season, 'filter[seasonYear]': year, 'filter[subtype]': 'TV', include: includeParam },
+          NEW_RELEASES_MAX_PAGES
+        );
+        const airingFromSeason = seasonResult.data.filter((anime) => anime.attributes.status === 'current');
+        data = dedupeById([...data, ...airingFromSeason]);
+        included = [...included, ...seasonResult.included];
+      } catch (seasonError) {
+        console.warn(`[kitsuClient] getWeeklyRatings: 시즌 보충 조회 실패(상태 필터 결과만 사용): ${seasonError.message}`);
+      }
+
       const includedIndex = buildIncludedIndex(included);
-      const items = data.map((anime) => mapToWeeklyItem(anime, includedIndex));
+      const syoboiIndex = await loadSyoboiIndex();
+      const items = data.map((anime) => mapToWeeklyItem(anime, includedIndex, syoboiIndex));
       const { days, unscheduled } = buildWeeklyRatingDays(startDate, normalizedEndDate, items);
 
       return { source: 'kitsu', period: { startDate, endDate: normalizedEndDate }, days, unscheduled };
@@ -438,30 +506,35 @@
 
   async function getNewReleases(endDate) {
     const { startDate, endDate: normalizedEndDate } = getBroadcastWeekRange(endDate);
-    const { startDate: quarterStart, endDate: quarterEnd } = getQuarterRange(normalizedEndDate);
+    const { year, season } = resolveSeason(new Date(`${normalizedEndDate}T00:00:00Z`));
 
     try {
-      const { data, included } = await fetchKitsuAllPages(
+      // filter[status]=current 목록은 일부 작품을 빼먹고(예: 桃源暗鬼 日光・華厳の滝編은
+      // attributes.status가 'current'인데도 목록에 없음) 페이지 크기 20에서는 offset 20 구간이
+      // 중복돼 누락도 생긴다(직접 확인). 시즌 필터는 서버가 분기 범위를 직접 걸러주고 이런
+      // 누락 없이 전체가 수집되므로 신작은 시즌 필터를 쓴다.
+      const { data, included, total } = await fetchKitsuAllPages(
         '/anime',
-        { 'filter[status]': 'current', 'filter[subtype]': 'TV', include: 'animeProductions.producer,genres,categories', sort: '-startDate' },
+        {
+          'filter[season]': season,
+          'filter[seasonYear]': year,
+          'filter[subtype]': 'TV',
+          include: 'animeProductions.producer,genres,categories',
+          sort: '-startDate'
+        },
         NEW_RELEASES_MAX_PAGES
       );
 
       if (data.length === 0) {
-        throw new Error('Kitsu에서 방영작 데이터를 찾을 수 없습니다.');
+        throw new Error('Kitsu에서 해당 분기 방영작 데이터를 찾을 수 없습니다.');
+      }
+
+      if (typeof total === 'number' && data.length < total) {
+        console.warn(`[kitsuClient] getNewReleases: Kitsu 총 ${total}건 중 ${data.length}건만 수집됨(페이지네이션 누락 가능).`);
       }
 
       const includedIndex = buildIncludedIndex(included);
-      const releases = data
-        .filter((anime) => {
-          const start = anime.attributes.startDate;
-          return start && start >= quarterStart && start <= quarterEnd;
-        })
-        .map((anime) => mapToReleaseItem(anime, includedIndex));
-
-      if (releases.length === 0) {
-        throw new Error('Kitsu에서 해당 분기에 시작한 방영작을 찾지 못했습니다.');
-      }
+      const releases = data.map((anime) => mapToReleaseItem(anime, includedIndex));
 
       return { source: 'kitsu', period: { startDate, endDate: normalizedEndDate }, releases };
     } catch (error) {
@@ -482,7 +555,8 @@
       });
 
       const includedIndex = buildIncludedIndex(data?.included);
-      const results = (data?.data || []).map((anime) => mapToSearchItem(anime, includedIndex));
+      const syoboiIndex = await loadSyoboiIndex();
+      const results = (data?.data || []).map((anime) => mapToSearchItem(anime, includedIndex, syoboiIndex));
 
       return { source: 'kitsu', query, results };
     } catch (error) {

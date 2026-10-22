@@ -322,6 +322,42 @@
    * 애니메이션과 MAL 지표(평점/평가 참여자 수/인기도 순위/즐겨찾기 수)를 묶어서 반환한다.
    * @param {string} endDate - 조회 기준 종료일 (YYYY-MM-DD)
    */
+  // ---- 방영 상태 판정 ----------------------------------------------------------
+  // 요일별 표의 일본어 타이틀 앞 색 점(초록=방영 중, 빨강=휴방/종료, 회색=확인 불가)에 쓰는 값.
+  // 실제 방송 일정을 주는 API가 없으므로 "다음 방송 예정일"과 "예상 종료일"로 추정한다.
+  const AIRING_SOON_DAYS = 14; // 이 안에 다음 방송이 있으면 방영 중으로 본다
+  const OVERDUE_GRACE_DAYS = 28; // 시작일+(회차-1)주가 이만큼 지나도 방영 중으로 남아 있으면 종료로 추정
+
+  function daysFromNow(ms) {
+    return (ms - Date.now()) / (24 * 60 * 60 * 1000);
+  }
+
+  // 시작일(YYYY-MM-DD)부터 매주 1화씩 방송했다고 가정한 예상 종료일이, 휴방 여유(28일)까지 지났는지.
+  function hasPassedExpectedEnd(startDate, episodeCount) {
+    const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(startDate || '');
+    if (!match || typeof episodeCount !== 'number' || episodeCount < 1) return false;
+    const expectedEndMs = Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3]) + (episodeCount - 1) * 7);
+    return daysFromNow(expectedEndMs) < -OVERDUE_GRACE_DAYS;
+  }
+
+  function describeNextBroadcast(nextMs) {
+    const days = daysFromNow(nextMs);
+    if (days > AIRING_SOON_DAYS) {
+      return { state: 'hiatus', reason: `휴방 중으로 보임 — 다음 방송이 약 ${Math.round(days)}일 뒤` };
+    }
+    return { state: 'airing', reason: '방영 중 — 다음 방송이 곧 예정됨' };
+  }
+
+  // Jikan(MAL)은 다음 방송 일정을 주지 않으므로, 상태가 'Currently Airing'이어도 예상 종료일이
+  // 한참 지났으면 종료로 추정하고, 그렇지 않으면 MAL 상태를 그대로 따른다.
+  function resolveAiringState(anime) {
+    if (anime.status === 'Finished Airing') return { state: 'ended', reason: 'MAL 상태: 방영 종료' };
+    if (hasPassedExpectedEnd(anime.aired?.from ? anime.aired.from.slice(0, 10) : null, anime.episodes)) {
+      return { state: 'ended', reason: '예상 종료일(시작일 + 총 회차 주 수)이 지나 방영 종료로 추정' };
+    }
+    return { state: 'airing', reason: 'MAL 상태: 방영 중(실제 방송 일정은 확인할 수 없음)' };
+  }
+
   async function getWeeklyRatings(endDate) {
     const { startDate, endDate: normalizedEndDate } = getBroadcastWeekRange(endDate);
 
@@ -337,6 +373,8 @@
           scoredBy: typeof anime.scored_by === 'number' ? anime.scored_by : null,
           popularityRank: typeof anime.popularity === 'number' ? anime.popularity : null,
           favorites: typeof anime.favorites === 'number' ? anime.favorites : null,
+          firstAirDate: anime.aired?.from ? anime.aired.from.slice(0, 10) : '미정',
+          airingState: resolveAiringState(anime),
           broadcastDayKorean: slot.dayKorean,
           broadcastTime: slot.timeText,
           broadcastStation: extractBroadcastStation(anime),

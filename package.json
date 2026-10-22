@@ -5,6 +5,7 @@
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
+    "build:syoboi": "node scripts/build-syoboi.js",
     "dev": "node --watch server.js"
   },
   "devDependencies": {
