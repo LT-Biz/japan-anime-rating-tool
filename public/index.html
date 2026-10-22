@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>일본 애니메이션·만화 정보</title>
-  <link rel="stylesheet" href="style.css?v=4" />
+  <link rel="stylesheet" href="style.css?v=5" />
 </head>
 <body>
   <header class="app-header">
@@ -158,9 +158,11 @@
       <nav class="book-type-tabs">
         <button class="book-type-btn active" data-book-type="MANGA" type="button">만화</button>
         <button class="book-type-btn" data-book-type="NOVEL" type="button">라이트노벨</button>
+        <button class="book-type-btn" data-book-type="NAROU" type="button">소설가가 되자</button>
+        <button class="book-type-btn" data-book-type="KAKUYOMU" type="button">카쿠요무</button>
       </nav>
 
-      <section class="book-panel">
+      <section id="aniListBookPanel" class="book-panel">
         <h2>
           <span id="bookTitle">일본 만화 순위</span>
           <span id="bookSourceStatus" class="source-status hidden"></span>
@@ -261,6 +263,29 @@
         <div id="bookTableContainer"></div>
         <p id="bookEmptyMessage" class="empty-message hidden">데이터가 없습니다.</p>
       </section>
+
+      <section id="webNovelPanel" class="book-panel hidden">
+        <h2>
+          <span id="webNovelTitle">웹소설 인기 랭킹</span>
+          <span id="webNovelFreshness" class="source-status hidden"></span>
+          <span class="info-wrapper">
+            <button id="webNovelInfoBtn" class="info-btn" type="button" aria-label="안내 보기">?</button>
+            <div id="webNovelInfoPopup" class="info-popup hidden">
+              웹소설 투고 사이트의 주간/월간 인기 랭킹 상위 300건입니다. 배포 때 받아 둔 스냅샷이라 실시간이 아니며(주 1회 갱신),
+              기준일은 제목 옆에 표시됩니다.<br /><br />
+              <b>소설가가 되자</b>: 공식 API 데이터입니다. 포인트는 "북마크 × 2 + 평가 점수"이고 주간/월간 포인트는 최근 7일/30일간
+              늘어난 포인트입니다. 서적화 여부 필드가 없어 제목·키워드의 "書籍化/コミカライズ/アニメ化" 표기로 추정합니다.<br /><br />
+              <b>카쿠요무</b>: 공식 API가 없어 공개 랭킹 페이지의 데이터를 읽습니다(개인 확인용). 기간별 포인트는 없고 사이트 순위와
+              누적 별점만 있으며, 서적화 여부는 카쿠요무의 서적화 표시를 따릅니다.<br /><br />
+              두 사이트 모두 일본 서점 판매량이 아니라 투고 사이트 안에서의 인기입니다.
+            </div>
+          </span>
+        </h2>
+        <div id="webNovelToolbar"></div>
+        <p id="webNovelSummary" class="section-hint"></p>
+        <div id="webNovelTableContainer"></div>
+        <p id="webNovelEmptyMessage" class="empty-message hidden">데이터가 없습니다.</p>
+      </section>
     </div>
   </main>
 
@@ -283,6 +308,9 @@
   <script defer src="kitsuClient.js?v=2"></script>
   <script defer src="jikanClient.js?v=2"></script>
   <script defer src="app.js?v=2"></script>
-  <script defer src="booksApp.js?v=3"></script>
+  <script defer src="booksApp.js?v=4"></script>
+  <!-- 웹소설 랭킹 스냅샷은 주 1회 새로 만들어지므로 immutable 캐시/버전 쿼리를 붙이지 않는다 -->
+  <script defer src="webnovel-ranking.js"></script>
+  <script defer src="webNovelApp.js?v=1"></script>
 </body>
 </html>

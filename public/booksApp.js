@@ -335,11 +335,20 @@
 
   modeButtons.forEach((button) => button.addEventListener('click', () => setMode(button.dataset.mode)));
 
+  // 탭: 만화/라이트노벨은 이 파일(AniList)이, 소설가가 되자/카쿠요무는 webNovelApp.js가 그린다. 탭이 바뀌면
+  // 'books:tab' 이벤트로 알리고, webNovelApp.js가 자기 패널을 보여주거나 숨긴다.
+  const aniListPanel = document.getElementById('aniListBookPanel');
+  const ANILIST_TABS = new Set(['MANGA', 'NOVEL']);
+
   bookTypeButtons.forEach((button) => {
     button.addEventListener('click', () => {
-      if (button.dataset.bookType === state.type) return;
-      state.type = button.dataset.bookType;
+      const tab = button.dataset.bookType;
       bookTypeButtons.forEach((b) => b.classList.toggle('active', b === button));
+      const isAniList = ANILIST_TABS.has(tab);
+      aniListPanel.classList.toggle('hidden', !isAniList);
+      document.dispatchEvent(new CustomEvent('books:tab', { detail: { tab } }));
+      if (!isAniList || tab === state.type) return;
+      state.type = tab;
       refresh();
     });
   });

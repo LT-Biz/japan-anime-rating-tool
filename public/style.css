@@ -947,3 +947,23 @@ body {
 .sort-indicator {
   font-size: 11px;
 }
+
+/* 웹소설 랭킹(소설가가 되자/카쿠요무) */
+.webnovel-query {
+  width: 170px;
+}
+
+.webnovel-inline-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.webnovel-inline-group[hidden] {
+  display: none;
+}
+
+.webnovel-mixed {
+  font-weight: 600;
+  color: #9a6200;
+}
