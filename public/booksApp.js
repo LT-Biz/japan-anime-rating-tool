@@ -40,6 +40,7 @@
   const bookSourceStatus = document.getElementById('bookSourceStatus');
   const bookSortSelect = document.getElementById('bookSortSelect');
   const bookAdaptationFilter = document.getElementById('bookAdaptationFilter');
+  const bookStatusFilter = document.getElementById('bookStatusFilter');
   const bookMinInputs = {
     popularity: document.getElementById('bookMinPopularity'),
     score: document.getElementById('bookMinScore'),
@@ -61,6 +62,7 @@
     type: 'MANGA',
     sort: 'popularity', // 서버에 요청하는 조회 기준(상위 200건을 고르는 기준)
     adaptation: 'all', // 애니화 필터: 'all' 또는 resolveAdaptationState의 state
+    status: 'all', // 연재 상태 필터: 'all' 또는 item.status 문구('연재 중'/'완결'/'휴재'/'중단')
     min: { popularity: null, score: null, favorites: null, trending: null },
     sorts: [] // [{ field, dir }] 1차→2차→3차 정렬. 비어 있으면 조회 기준 순서(순위) 그대로
   };
@@ -91,6 +93,7 @@
   function applyFilters(items) {
     return items.filter((item) => {
       if (state.adaptation !== 'all' && item.adaptation.state !== state.adaptation) return false;
+      if (state.status !== 'all' && item.status !== state.status) return false;
       return Object.entries(state.min).every(([field, min]) => {
         if (min === null) return true;
         const value = SORT_FIELDS[field].get(item);
@@ -125,6 +128,7 @@
   function describeFilters() {
     const parts = [];
     if (state.adaptation !== 'all') parts.push(ADAPTATION_LABELS[state.adaptation]);
+    if (state.status !== 'all') parts.push(state.status);
     Object.entries(state.min).forEach(([field, min]) => {
       if (min !== null) parts.push(`${SORT_FIELDS[field].label} ≥ ${min.toLocaleString('ko-KR')}`);
     });
@@ -374,6 +378,11 @@
     renderView();
   });
 
+  bookStatusFilter.addEventListener('change', () => {
+    state.status = bookStatusFilter.value;
+    renderView();
+  });
+
   // 숫자 입력은 타이핑 중에 표가 계속 다시 그려지지 않게 잠깐 기다렸다가 적용한다.
   // 타이머는 입력 칸마다 따로 둔다(하나를 공유하면 다른 칸의 대기 중인 입력이 취소된다).
   Object.entries(bookMinInputs).forEach(([field, input]) => {
@@ -391,6 +400,8 @@
   bookFilterResetBtn.addEventListener('click', () => {
     state.adaptation = 'all';
     bookAdaptationFilter.value = 'all';
+    state.status = 'all';
+    bookStatusFilter.value = 'all';
     Object.keys(state.min).forEach((field) => {
       state.min[field] = null;
       bookMinInputs[field].value = '';
