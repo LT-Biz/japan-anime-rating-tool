@@ -26,6 +26,10 @@
   // AniList Rate Limit(현재 분당 약 30회) 대응: 이 클라이언트가 보내는 모든 요청은
   // 아래 큐를 거쳐 최소 이 간격 이상을 두고 순차 실행된다.
   const MIN_REQUEST_INTERVAL_MS = 2100;
+  // 목록(요일별/분기 신작/ONA 등/만화·소설 순위)에서 뺄 장르(요청: Hentai). AniList는 `genre_not_in`으로 서버에서
+  // 걸러 주므로 페이지 수도 줄어든다. 사용자가 직접 입력하는 검색은 거르지 않는다. 직접 확인: ONA 등 탭에는
+  // Hentai 작품이 시즌당 10~17건 섞여 있었고 TV/만화 목록에는 없었다.
+  const EXCLUDED_GENRES_GQL = JSON.stringify(['Hentai']);
 
   const PAGE_SIZE = 50;
   const WEEKLY_MAX_PAGES = 3;
@@ -222,6 +226,7 @@
   }
 
   function resolveAiringState(media, syoboiEntry) {
+    if (media.status === 'NOT_YET_RELEASED') return { state: 'unknown', reason: '아직 방영(공개) 전' };
     const airingAt = media.nextAiringEpisode?.airingAt;
     if (typeof airingAt === 'number') return describeNextBroadcast(airingAt * 1000);
 
@@ -388,7 +393,7 @@
     query($page: Int, $perPage: Int) {
       Page(page: $page, perPage: $perPage) {
         pageInfo { hasNextPage }
-        media(status: RELEASING, type: ANIME, format: TV, sort: POPULARITY_DESC) {
+        media(status: RELEASING, type: ANIME, format: TV, genre_not_in: ${EXCLUDED_GENRES_GQL}, sort: POPULARITY_DESC) {
           id
           status
           episodes
@@ -413,7 +418,7 @@
     query($page: Int, $perPage: Int, $season: MediaSeason, $seasonYear: Int) {
       Page(page: $page, perPage: $perPage) {
         pageInfo { hasNextPage }
-        media(season: $season, seasonYear: $seasonYear, type: ANIME, format: TV) {
+        media(season: $season, seasonYear: $seasonYear, type: ANIME, format: TV, genre_not_in: ${EXCLUDED_GENRES_GQL}) {
           title { romaji english }
           format
           genres
@@ -471,6 +476,99 @@
   // 에러로 대체한다. 다른 소스(Jikan/Kitsu)를 대신 호출하지 않는다 — 어떤 API를 쓸지는
   // 화면 상단 소스 선택 버튼으로 사용자가 직접 고른다.
 
+  // ---- 시즌별 TV 외 작품(ONA/OVA/극장판/스페셜/뮤직/TV 숏) ---------------------------
+  // 분기 신작(ONA 등) 탭용. format이 TV가 아닌 모든 작품을 연도(seasonYear)+시즌(season) 조합별로 받는다.
+  // 시즌 하나는 대개 50~100건(요청 1~2번)이지만 여러 연도·시즌을 고르면 조합 수만큼 순차로 요청한다
+  // (요청 간격 큐 때문에 조합당 약 2~4초). 조합별 결과는 메모리에 캐시하고 실패는 캐시하지 않는다.
+  // 시즌은 일본 방송 분기(겨울 1~3월/봄 4~6월/여름 7~9월/가을 10~12월)이며 resolveSeason과 같은 기준이다.
+  const NON_TV_PAGE_SIZE = 50;
+  const NON_TV_MAX_PAGES = 8; // 조합 하나당 최대 400건
+  const nonTvSeasonCache = new Map();
+  // 중국 제작 작품(donghua)은 제외한다(요청). AniList에는 제작국 제외 필터가 없어 `countryOfOrigin`을 받아
+  // 클라이언트에서 거른다. 다른 국가(KR/TW 등)를 빼려면 여기에 코드를 추가한다.
+  const EXCLUDED_ORIGIN_COUNTRIES = new Set(['CN']);
+
+  const NON_TV_QUERY = `
+    query($page: Int, $perPage: Int, $season: MediaSeason, $seasonYear: Int) {
+      Page(page: $page, perPage: $perPage) {
+        pageInfo { hasNextPage }
+        media(season: $season, seasonYear: $seasonYear, type: ANIME, format_not: TV, genre_not_in: ${EXCLUDED_GENRES_GQL}, sort: POPULARITY_DESC) {
+          id
+          status
+          episodes
+          season
+          seasonYear
+          countryOfOrigin
+          startDate { year month day }
+          title { romaji english native }
+          format
+          genres
+          tags { name isMediaSpoiler }
+          coverImage { large }
+          averageScore
+          favourites
+          popularity
+          stats { scoreDistribution { amount } }
+          nextAiringEpisode { airingAt }
+          siteUrl
+        }
+      }
+    }
+  `;
+
+  function fetchNonTvSeasonMedia(year, season) {
+    const key = `${year}-${season}`;
+    if (!nonTvSeasonCache.has(key)) {
+      const promise = (async () => {
+        const list = [];
+        for (let page = 1; page <= NON_TV_MAX_PAGES; page += 1) {
+          const data = await gqlRequest(NON_TV_QUERY, { page, perPage: NON_TV_PAGE_SIZE, season, seasonYear: year });
+          list.push(...(data?.Page?.media || []));
+          if (!data?.Page?.pageInfo?.hasNextPage) break;
+        }
+        return list;
+      })();
+      promise.catch(() => nonTvSeasonCache.delete(key));
+      nonTvSeasonCache.set(key, promise);
+    }
+    return nonTvSeasonCache.get(key);
+  }
+
+  // combos: [{ year: 2026, season: 'FALL' }, ...]. 일부 조합만 실패하면 나머지는 보여주고 failed에 담아 돌려준다.
+  async function getNonTvSeasonal(combos, onProgress) {
+    const syoboiIndex = await loadSyoboiIndex();
+    const mediaById = new Map();
+    const failed = [];
+
+    for (let index = 0; index < combos.length; index += 1) {
+      const { year, season } = combos[index];
+      try {
+        const list = await fetchNonTvSeasonMedia(year, season);
+        list.forEach((media) => {
+          if (!EXCLUDED_ORIGIN_COUNTRIES.has(media.countryOfOrigin)) mediaById.set(media.id, media);
+        });
+      } catch (error) {
+        console.error(`[anilistClient] getNonTvSeasonal ${year} ${season} 조회 실패: ${error.message}`);
+        failed.push({ year, season, message: error.message });
+      }
+      if (onProgress) onProgress(index + 1, combos.length);
+    }
+
+    if (mediaById.size === 0 && failed.length > 0) {
+      return { source: 'error', items: [], failed, errorMessage: `AniList 조회 실패: ${failed[0].message}` };
+    }
+
+    const items = assignPopularityRanks(
+      [...mediaById.values()].map((media) => ({
+        ...mapToWeeklyItem(media, syoboiIndex),
+        formatCode: media.format,
+        season: media.season,
+        seasonYear: media.seasonYear
+      }))
+    );
+    return { source: 'anilist', items, failed };
+  }
+
   // ---- 만화/라이트노벨 순위(IP 발굴용) -------------------------------------------
   // 일본 원작 만화(format MANGA)와 라이트노벨(format NOVEL)을 AniList 지표(인기도/급상승/평점/최근
   // 연재 시작)로 보여준다. 애니화 여부는 relations 중 relationType === 'ADAPTATION'이면서 노드가
@@ -495,7 +593,7 @@
     query($page: Int, $perPage: Int, $format: MediaFormat, $sort: [MediaSort], $minPopularity: Int, $startAfter: FuzzyDateInt) {
       Page(page: $page, perPage: $perPage) {
         pageInfo { hasNextPage }
-        media(type: MANGA, countryOfOrigin: JP, format: $format, sort: $sort, status_not: NOT_YET_RELEASED, popularity_greater: $minPopularity, startDate_greater: $startAfter) {
+        media(type: MANGA, countryOfOrigin: JP, format: $format, sort: $sort, genre_not_in: ${EXCLUDED_GENRES_GQL}, status_not: NOT_YET_RELEASED, popularity_greater: $minPopularity, startDate_greater: $startAfter) {
           id
           title { romaji english native }
           format
@@ -782,6 +880,7 @@
     searchAnimeByTitle,
     checkStatus,
     getScoreHistory,
-    getBookRanking
+    getBookRanking,
+    getNonTvSeasonal
   };
 })();

@@ -63,7 +63,8 @@
 
     <nav class="tabs">
       <button class="tab-btn active" data-tab="rating">요일별 방영 애니메이션</button>
-      <button class="tab-btn" data-tab="new">분기 신작 애니메이션</button>
+      <button class="tab-btn" data-tab="new">분기 신작 애니메이션 (TV 방영)</button>
+      <button class="tab-btn" data-tab="ona">분기 신작 애니메이션 (ONA 등)</button>
       <button class="tab-btn" data-tab="search">애니메이션 검색</button>
     </nav>
 
@@ -113,7 +114,7 @@
     </section>
 
     <section id="new" class="tab-panel">
-      <h2>분기 신작 애니메이션 <span id="newSourceStatus" class="source-status hidden"></span></h2>
+      <h2>분기 신작 애니메이션 (TV 방영) <span id="newSourceStatus" class="source-status hidden"></span></h2>
       <p class="section-hint">
         기준 날짜가 속한 분기(계절)에 방영 중인 TV 애니메이션 전체를 보여줍니다. 반드시
         이번 주에 새로 시작한 작품만 나오는 것은 아니며, 같은 분기 안에서는 기준 날짜를
@@ -136,6 +137,54 @@
         </table>
       </div>
       <p id="newEmptyMessage" class="empty-message hidden">데이터가 없습니다.</p>
+    </section>
+
+    <section id="ona" class="tab-panel">
+      <h2>
+        분기 신작 애니메이션 (ONA 등)
+        <span id="onaSourceStatus" class="source-status hidden"></span>
+        <span class="info-wrapper">
+          <button id="onaInfoBtn" class="info-btn" type="button" aria-label="안내 보기">?</button>
+          <div id="onaInfoPopup" class="info-popup hidden">
+            형태(format)가 TV가 아닌 작품 전체(ONA·OVA·극장판·스페셜·뮤직·TV 숏)를 연도·시즌별로 보여줍니다.
+            요일별 방영 탭과 같은 항목에서 방영일/방송 시간을 빼고 형태와 시즌을 더했습니다.<br /><br />
+            이 탭은 위의 데이터 소스 선택과 무관하게 <b>AniList 데이터만</b> 사용합니다. 연도와 시즌은 여러 개를 고를 수 있고,
+            고른 뒤 "조회"를 누르면 조합마다 AniList를 호출하므로 많이 고를수록 오래 걸립니다(한 번 받은 조합은 다시 받지 않습니다).<br /><br />
+            시즌은 일본 방송 분기 기준입니다(겨울 1~3월, 봄 4~6월, 여름 7~9월, 가을 10~12월). 처음에는 오늘이 속한
+            시즌을 불러옵니다. 방영 중이 아닌 작품(공개 예정·종료)도 포함되며, ONA·OVA·극장판은 방영 요일·시간이 없는 경우가
+            많아 일정 정보가 없습니다.
+          </div>
+        </span>
+      </h2>
+      <div class="book-toolbar">
+        <span class="book-toolbar-title">시즌</span>
+        <span>연도</span>
+        <span id="onaYearSlot"></span>
+        <span>시즌</span>
+        <span id="onaSeasonSlot"></span>
+        <button id="onaLoadBtn" type="button" class="book-small-btn">조회</button>
+        <span id="onaLoadHint" class="book-toolbar-note"></span>
+      </div>
+      <div class="book-toolbar">
+        <span class="book-toolbar-title">필터</span>
+        <span>형태</span>
+        <span id="onaFormatSlot"></span>
+        <span class="book-toolbar-title">정렬</span>
+        <select id="onaSortSelect"></select>
+        <button id="onaSortDirBtn" type="button" class="book-small-btn"></button>
+      </div>
+      <p class="status-legend">
+        <span><span class="status-dot status-dot-airing"></span>방영 중</span>
+        <span><span class="status-dot status-dot-stopped"></span>휴방·방영 종료</span>
+        <span><span class="status-dot status-dot-unknown"></span>확인 불가·방영 전</span>
+      </p>
+      <p id="onaSummary" class="section-hint"></p>
+      <div id="onaLoading" class="loading-indicator hidden">
+        <span class="spinner"></span>
+        <span id="onaLoadingText">AniList에서 불러오는 중...</span>
+      </div>
+      <div id="onaTableContainer"></div>
+      <p id="onaEmptyMessage" class="empty-message hidden">데이터가 없습니다.</p>
     </section>
 
     <section id="search" class="tab-panel">
@@ -291,11 +340,12 @@
   <!-- 편성표 데이터는 매일 새로 만들어지므로 immutable 캐시/버전 쿼리를 붙이지 않는다 -->
   <script defer src="syoboi-schedule.js"></script>
   <script defer src="syoboiSchedule.js?v=3"></script>
-  <script defer src="anilistClient.js?v=3"></script>
+  <script defer src="anilistClient.js?v=6"></script>
   <script defer src="kitsuClient.js?v=2"></script>
   <script defer src="jikanClient.js?v=2"></script>
   <script defer src="app.js?v=2"></script>
   <script defer src="multiSelect.js?v=1"></script>
+  <script defer src="onaApp.js?v=1"></script>
   <script defer src="booksApp.js?v=6"></script>
   <!-- 웹소설 랭킹 스냅샷은 주 1회 새로 만들어지므로 immutable 캐시/버전 쿼리를 붙이지 않는다 -->
   <script defer src="webnovel-ranking.js"></script>
