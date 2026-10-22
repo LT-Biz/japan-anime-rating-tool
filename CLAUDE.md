@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Overview
 
-일본 애니메이션 방영 정보(요일별 편성, 신작, 검색)를 보여주는 **완전한 정적 웹사이트**("일본 애니메이션 방영 정보"). 빌드 도구·프레임워크·백엔드 API 없이 Vanilla JS/CSS로 작성되어 있고, 브라우저가 세 데이터 소스 클라이언트(`public/anilistClient.js`/`public/kitsuClient.js`/`public/jikanClient.js`)를 통해 각 API를 **직접** 호출한다. 셋 다 `Access-Control-Allow-Origin: *`를 응답하므로 별도 백엔드 프록시 없이 브라우저에서 바로 호출 가능하다(직접 curl로 확인).
+일본 애니메이션 방영 정보(요일별 편성, 신작, 검색)와 일본 만화·라이트노벨 순위(IP 발굴용)를 보여주는 **완전한 정적 웹사이트**("일본 애니메이션 방영 정보"). 빌드 도구·프레임워크·백엔드 API 없이 Vanilla JS/CSS로 작성되어 있고, 브라우저가 세 데이터 소스 클라이언트(`public/anilistClient.js`/`public/kitsuClient.js`/`public/jikanClient.js`)를 통해 각 API를 **직접** 호출한다. 셋 다 `Access-Control-Allow-Origin: *`를 응답하므로 별도 백엔드 프록시 없이 브라우저에서 바로 호출 가능하다(직접 curl로 확인).
 
 **데이터 소스는 사용자가 화면 상단 버튼으로 직접 고른다** — [AniList GraphQL API](https://docs.anilist.co/) / [Kitsu API](https://kitsu.docs.apiary.io/) / [Jikan REST API v4](https://docs.api.jikan.moe/)(MyAnimeList 비공식 오픈 API) 순서로 버튼이 나열되며, 기본값(최초 진입 시)은 **AniList**다. 과거에는 "Jikan 실패 시 Kitsu로 자동 대체"하는 폴백 체인이었지만, 지금은 그 구조를 걷어내고 세 클라이언트가 완전히 독립적으로 동작한다 — 선택한 API 호출이 실패하면 그 API 자체의 Mock 데이터로만 대체되고, 다른 API를 대신 호출하지 않는다.
 
@@ -29,6 +29,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - `public/app.js` — DOM 렌더링과 이벤트 처리. `CLIENT_GETTERS`로 세 클라이언트 중 `activeSource`에 해당하는 것을 골라 호출하고, 그 반환값을 받아 화면을 그리기만 한다. 각 탭 제목 옆 상태 배지(`updateSourceStatus`)로 실시간 연동/Mock 대체/오류 여부를 표시하고, 상단 소스 버튼 옆 점(`updateSourceDot`)으로 각 API의 생존 여부를 표시한다.
 - `public/index.html` — 3개 탭 구조: 요일별 방영 애니메이션 / 분기 신작 애니메이션 / 애니메이션 검색. `<script>` 로드 순서는 `anilistClient.js` → `kitsuClient.js` → `jikanClient.js` → `app.js`(세 클라이언트끼리는 서로 호출하지 않으므로 상호 순서 자체는 무관하지만, 화면 버튼 순서와 맞춰뒀다).
 - `public/style.css` — 외부 UI 라이브러리 없는 Vanilla CSS. 컨테이너는 `width:100%`로 브라우저 폭에 동적으로 맞춘다(고정 `max-width` 없음).
+- `public/booksApp.js` — 상단 화면 전환(`.mode-btn`: 애니메이션 방영 정보 / 만화·소설 순위 정보, `#animeMode`/`#booksMode`)과 **만화·소설 순위 화면**. 애니메이션 쪽(데이터 소스 버튼, 기준 날짜, 3개 탭)과 완전히 별개이며 AniList만 쓴다(`AniListClient.getBookRanking(type, sortKey)`, `type`은 `'MANGA'|'NOVEL'`). `app.js`의 표 셀 헬퍼와 `setupInfoPopup`/`updateSourceStatus`/`getTitleColumnWidth`를 재사용하므로 `app.js` 뒤에 로드한다. 아래 "만화·소설 순위" 항목 참고.
 - `public/syoboiSchedule.js` — Syoboi 편성표 매칭/병합 공용 모듈(`window.SyoboiSchedule`). `anilistClient.js`/`kitsuClient.js`가 사용한다(자세한 내용은 아래 `kitsuClient.js` 항목).
 - `scripts/build-syoboi.js` + `public/syoboi-schedule.js` — Kitsu 방영 정보 보충용 정적 편성표 생성 스크립트와 그 산출물(자세한 내용은 아래 `kitsuClient.js` 항목). 백엔드가 아니라 개발자가 수동/CI로 돌리는 오프라인 스크립트다.
 - `server.js` — `express.static`으로 `public/`만 서빙하는 로컬 미리보기 서버. API 라우트 없음.
@@ -81,6 +82,15 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - **검색(`searchAnimeByTitle`)**: `/anime?q=` 사용, 정확히 일치하지 않아도 유사도 기반 결과를 그대로 반환(별도 유사도 계산 없음). API 실패 시 다른 기능과 달리 **Mock 데이터로 대체하지 않고** 명확한 에러 메시지를 반환한다(검색은 특정 검색어에 대한 응답이라 무관한 Mock을 보여주면 오도하게 됨) — 이 원칙은 세 클라이언트 모두 동일하다.
 - **날짜 연산**: 문자열 파싱은 항상 `Date.UTC`/`getUTC*`로 처리한다(`app.js`/다른 두 클라이언트도 동일 원칙). `new Date('YYYY-MM-DD')` + 로컬 getter 조합은 방문자 브라우저 타임존에 따라 하루 밀리는 버그를 낸 적이 있음 — 새 날짜 로직 추가 시 이 패턴을 반복하지 말 것.
 - **Mock 폴백**: 이 클라이언트 자체가 실패했을 때만 사용(요일별/신작). 다른 소스로 자동 전환되지 않는다. Mock 데이터의 공식 사이트/커버 이미지 링크는 실제 존재를 확인한 URL만 사용한다(가짜 도메인 금지).
+
+### 만화·소설 순위(`getBookRanking` / `booksApp.js`) 핵심 로직과 한계
+
+- 목적: 아직 애니화되지 않은 인기 원작(IP) 발굴. 일본 원작(`countryOfOrigin: JP`)의 `format: MANGA`(만화)/`NOVEL`(라이트노벨)을 AniList 지표로 보여준다. **인기도(`popularity`)는 AniList 이용자의 목록 등록 수이지 일본 서점 판매량이 아니다** — 판매 부수/순위는 이 API로 알 수 없다(오리콘은 공개 API가 없고 데이터 전재가 금지돼 있어 데이터를 가져오지 않는다. 필요하면 링크만 건다).
+- 순위 기준(`BOOK_SORTS`): 인기도순(`POPULARITY_DESC`), 급상승순(`TRENDING_DESC`), 평점순(`SCORE_DESC` + 최소 인기도 1만), 최근 3년 내 시작작 인기순(`startDate_greater` + `POPULARITY_DESC`). `START_DATE_DESC` 정렬은 월/일이 빈 날짜·미래 작품이 섞여 순서가 엉망이라 쓰지 않는다(직접 확인). 정렬 기준당 최대 200건(50건×4페이지)이며, 요청 간격 큐 때문에 처음 받는 데 약 9초 걸린다. `(종류|기준)`별로 결과를 캐시하고 실패는 캐시하지 않는다.
+- **AniList는 값이 `null`인 필터 변수를 거부한다**(`Illegal operator and value combination`) — `popularity_greater`/`startDate_greater`는 필요할 때만 변수에 넣는다. 항상 `status_not: NOT_YET_RELEASED`로 발표 전 작품을 뺀다.
+- 애니화 상태(`resolveAdaptationState`): `relations`에서 `relationType(version: 2) === 'ADAPTATION'`이면서 노드 `type === 'ANIME'`인 항목의 상태를 요약한다(우선순위: 방영 중 > 제작 예정 > 방영 완료 > 중단, 없으면 `none` = 미애니화). **AniList에 없는 실사 드라마·영화·게임화는 반영되지 않으므로 '미애니화'가 진짜 미각색을 뜻하지는 않는다.** "아직 애니화 안 된 작품만" 체크박스는 받아 둔 목록을 거르기만 하며(재요청 없음) 순위 번호는 필터 전 기준이다.
+- 만화·소설 화면은 처음 열 때 한 번만 불러온다(AniList 분당 약 30회 한도를 아끼기 위함). Mock 데이터는 쓰지 않는다 — 순위에 가짜 데이터를 보여주면 오도하므로 실패하면 에러 문구만 보여준다.
+- 라이트노벨은 AniList에서 `type: MANGA`, `format: NOVEL`이다. 작가는 `staff` 상위 2명, 권수(`volumes`)는 연재 중 작품이 대부분 비어 있어 표에 넣지 않았다.
 
 ## UI 규칙
 

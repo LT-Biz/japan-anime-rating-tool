@@ -759,3 +759,118 @@ body {
 .status-legend-hint {
   color: #999;
 }
+
+/* ---- 일본 만화·소설 순위 화면 ---- */
+.mode-switch {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.mode-btn {
+  flex: 1;
+  padding: 14px 0;
+  border: 2px solid #2b2f77;
+  background: #fff;
+  color: #2b2f77;
+  font-size: 15px;
+  font-weight: 700;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.mode-btn.active {
+  background: #2b2f77;
+  color: #fff;
+}
+
+.book-type-tabs {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 16px;
+}
+
+.book-type-btn {
+  flex: 1;
+  padding: 12px 0;
+  border: none;
+  background: #e6e7ee;
+  color: #555;
+  font-size: 14px;
+  font-weight: 600;
+  border-radius: 8px 8px 0 0;
+  cursor: pointer;
+}
+
+.book-type-btn.active {
+  background: #fff;
+  color: #2b2f77;
+}
+
+.book-panel {
+  background: #fff;
+  border-radius: 0 0 8px 8px;
+  padding: 16px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+}
+
+.book-panel h2 {
+  margin-top: 0;
+  font-size: 16px;
+  color: #333;
+}
+
+.book-filter {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: 8px;
+  cursor: pointer;
+}
+
+.book-legend {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+  margin: 0 0 10px;
+  font-size: 12px;
+  color: #555;
+}
+
+/* 애니화 상태 뱃지 */
+.adapt-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: help;
+}
+
+.adapt-badge-none {
+  background: #eef0fb;
+  color: #2b2f77;
+  box-shadow: inset 0 0 0 1px #2b2f77;
+}
+
+.adapt-badge-airing {
+  background: #e6f6ea;
+  color: #1f7a3a;
+}
+
+.adapt-badge-planned {
+  background: #fff3dc;
+  color: #9a6200;
+}
+
+.adapt-badge-finished {
+  background: #eee;
+  color: #666;
+}
+
+.adapt-badge-cancelled {
+  background: #fbe9ea;
+  color: #a02a30;
+}

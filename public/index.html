@@ -3,15 +3,21 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>일본 애니메이션 방영 정보</title>
-  <link rel="stylesheet" href="style.css?v=2" />
+  <title>일본 애니메이션·만화 정보</title>
+  <link rel="stylesheet" href="style.css?v=3" />
 </head>
 <body>
   <header class="app-header">
-    <h1>일본 애니메이션 방영 정보</h1>
+    <h1>일본 애니메이션·만화 정보</h1>
   </header>
 
   <main class="container">
+    <nav class="mode-switch">
+      <button class="mode-btn active" data-mode="anime" type="button">일본 애니메이션 방영 정보</button>
+      <button class="mode-btn" data-mode="books" type="button">일본 만화·소설 순위 정보</button>
+    </nav>
+
+    <div id="animeMode">
     <section class="date-panel">
       <label for="baseDate">기준 날짜 선택</label>
       <div class="date-controls">
@@ -146,6 +152,56 @@
       <div id="searchResultsContainer"></div>
       <p id="searchEmptyMessage" class="empty-message hidden">검색할 타이틀을 입력해주세요.</p>
     </section>
+    </div>
+
+    <div id="booksMode" class="hidden">
+      <nav class="book-type-tabs">
+        <button class="book-type-btn active" data-book-type="MANGA" type="button">만화</button>
+        <button class="book-type-btn" data-book-type="NOVEL" type="button">라이트노벨</button>
+      </nav>
+
+      <section class="book-panel">
+        <h2>
+          <span id="bookTitle">일본 만화 순위</span>
+          <span id="bookSourceStatus" class="source-status hidden"></span>
+          <span class="info-wrapper">
+            <button id="bookInfoBtn" class="info-btn" type="button" aria-label="안내 보기">?</button>
+            <div id="bookInfoPopup" class="info-popup hidden">
+              아직 애니화되지 않은 인기 원작을 찾기 위한 화면입니다. 데이터는 AniList이며, 일본 원작(만화/라이트노벨)만 보여줍니다.<br /><br />
+              <b>인기도</b>는 AniList 이용자가 목록에 담은 수, <b>급상승</b>은 최근 관심이 늘어난 정도입니다. 일본 서점의
+              판매량이나 판매 순위가 아닙니다.<br /><br />
+              <b>애니화</b>는 AniList에 연결된 애니메이션 기준입니다. 실사 드라마·영화·게임은 반영되지 않아 "미애니화"로 보일 수 있습니다.
+            </div>
+          </span>
+        </h2>
+        <div class="sort-toolbar">
+          <label for="bookSortSelect">순위 기준</label>
+          <select id="bookSortSelect">
+            <option value="popularity">인기도순</option>
+            <option value="trending">급상승순</option>
+            <option value="score">평점순 (인기도 1만 이상)</option>
+            <option value="recent">최근 3년 내 시작작 (인기도순)</option>
+          </select>
+          <label class="book-filter">
+            <input type="checkbox" id="bookOnlyUnadapted" />
+            아직 애니화 안 된 작품만
+          </label>
+        </div>
+        <p class="book-legend">
+          <span class="adapt-badge adapt-badge-none">미애니화</span>
+          <span class="adapt-badge adapt-badge-planned">애니 제작 예정</span>
+          <span class="adapt-badge adapt-badge-airing">애니 방영 중</span>
+          <span class="adapt-badge adapt-badge-finished">애니 방영 완료</span>
+        </p>
+        <p id="bookSummary" class="section-hint"></p>
+        <div id="bookLoading" class="loading-indicator hidden">
+          <span class="spinner"></span>
+          <span>AniList에서 순위를 불러오는 중... (처음에는 10초 정도 걸립니다)</span>
+        </div>
+        <div id="bookTableContainer"></div>
+        <p id="bookEmptyMessage" class="empty-message hidden">데이터가 없습니다.</p>
+      </section>
+    </div>
   </main>
 
   <div id="imageModal" class="image-modal hidden">
@@ -163,9 +219,10 @@
   <!-- 편성표 데이터는 매일 새로 만들어지므로 immutable 캐시/버전 쿼리를 붙이지 않는다 -->
   <script defer src="syoboi-schedule.js"></script>
   <script defer src="syoboiSchedule.js?v=3"></script>
-  <script defer src="anilistClient.js?v=2"></script>
+  <script defer src="anilistClient.js?v=3"></script>
   <script defer src="kitsuClient.js?v=2"></script>
   <script defer src="jikanClient.js?v=2"></script>
   <script defer src="app.js?v=2"></script>
+  <script defer src="booksApp.js?v=1"></script>
 </body>
 </html>
