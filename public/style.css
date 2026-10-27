@@ -253,8 +253,31 @@ body {
   color: #fff;
 }
 
+/* 표 영역의 높이를 화면(뷰포트) 높이 안으로 제한하고 표 안에서 스크롤한다. 그렇게 하면 가로 스크롤바가 표
+   맨 아래(= 긴 페이지의 맨 아래)가 아니라 지금 보이는 화면 하단에 생겨서, 가로로 움직이려고 페이지 끝까지
+   내려갈 필요가 없다. 머리글(thead)은 아래 규칙으로 위에 고정된다. */
 .table-wrapper {
-  overflow-x: auto;
+  overflow: auto;
+  max-height: calc(100vh - 100px);
+  cursor: grab; /* 표를 끌어서 좌우·상하로 이동할 수 있다(tablePan.js) */
+}
+
+.table-wrapper.is-dragging {
+  cursor: grabbing;
+  user-select: none;
+}
+
+/* 타이틀 칸은 텍스트를 드래그해 선택·복사할 수 있어야 하므로 이동 대상에서 빼고 텍스트 커서를 쓴다 */
+.table-wrapper .title-scroll {
+  cursor: text;
+}
+
+.data-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: #fff;
+  box-shadow: 0 1px 0 #ddd;
 }
 
 .data-table {
@@ -551,6 +574,11 @@ body {
 
 .data-table thead .sticky-col {
   z-index: 3;
+  top: 0;
+}
+
+.data-table thead .sticky-col-last {
+  box-shadow: 2px 0 4px rgba(0, 0, 0, 0.08), 0 1px 0 #ddd;
 }
 
 .sticky-col-last {
