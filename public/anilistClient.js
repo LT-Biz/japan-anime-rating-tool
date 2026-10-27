@@ -778,18 +778,137 @@
     return { points, truncated, totalWeeks: allSamples.length };
   }
 
+  // ---- 선택한 주(기준 날짜 포함 7일)의 방영 목록 ---------------------------------------
+  // 예전에는 `status: RELEASING`(지금 방영 중)만 받아 기준 날짜를 바꿔도 같은 목록이 나왔고, 이미 종영한
+  // 작품은 마지막 화가 방송된 주에도 빠졌다(예: BLEACH 禍進譚은 최종화 방송 직후 FINISHED가 되어 사라짐).
+  // 지금은 AniList의 방송 일정(airingSchedules)에서 "그 7일 안에 실제 방송된(또는 방송 예정인) TV 작품"을
+  // 받는다. 지난 주도 조회되고, 그 주에 마지막 화를 방송하고 끝난 작품도 포함된다. 방영 요일/시간도 그 주
+  // 일정에서 정확히 나온다.
+  // - 기준 날짜가 오늘 이후까지 걸치면 일정이 없는 장수 방송(짱구·사자에상 등)도 있으므로 `RELEASING` 목록을
+  //   합쳐서(중복 제거) 보여준다.
+  // - 평점·인기도·즐겨찾기는 지난 시점 값이 아니라 **현재 값**이다.
+  // - AniList에 일정이 등록되지 않은 작품은 지난 주 조회에서 빠질 수 있다(AniList 데이터의 한계).
+  const SCHEDULE_PAGE_SIZE = 50;
+  const SCHEDULE_MAX_PAGES = 8; // 한 주 최대 400건(TV 외 형태도 섞여 있어 TV는 그중 일부)
+  const SYOBOI_FRESH_DAYS = 14; // 편성표 스냅샷이 의미 있는 기간(이보다 오래된 주에는 방송사 보충을 안 한다)
+  const weeklyScheduleCache = new Map();
+
+  const WEEKLY_SCHEDULE_QUERY = `
+    query($page: Int, $from: Int, $to: Int) {
+      Page(page: $page, perPage: ${SCHEDULE_PAGE_SIZE}) {
+        pageInfo { hasNextPage }
+        airingSchedules(airingAt_greater: $from, airingAt_lesser: $to, sort: TIME) {
+          airingAt
+          episode
+          media {
+            id
+            status
+            episodes
+            countryOfOrigin
+            startDate { year month day }
+            title { romaji english native }
+            format
+            genres
+            tags { name isMediaSpoiler }
+            coverImage { large }
+            averageScore
+            favourites
+            popularity
+            stats { scoreDistribution { amount } }
+            nextAiringEpisode { airingAt }
+            siteUrl
+          }
+        }
+      }
+    }
+  `;
+
+  // 'YYYY-MM-DD'(JST) 하루의 시작 시각(UTC epoch 밀리초). JST = UTC+9.
+  function jstDayStartMs(dateStr) {
+    const [y, m, d] = dateStr.split('-').map(Number);
+    return Date.UTC(y, m - 1, d) - 9 * 60 * 60 * 1000;
+  }
+
+  function fetchWeeklySchedule(startDate, endDate) {
+    const key = `${startDate}~${endDate}`;
+    if (!weeklyScheduleCache.has(key)) {
+      const fromSec = Math.floor(jstDayStartMs(startDate) / 1000) - 1; // airingAt_greater는 미포함이라 1초 앞당긴다
+      const toSec = Math.floor(jstDayStartMs(endDate) / 1000) + 24 * 60 * 60; // 종료일 다음날 0시(JST) 전까지
+      const promise = (async () => {
+        const entries = [];
+        for (let page = 1; page <= SCHEDULE_MAX_PAGES; page += 1) {
+          const data = await gqlRequest(WEEKLY_SCHEDULE_QUERY, { page, from: fromSec, to: toSec });
+          entries.push(...(data?.Page?.airingSchedules || []));
+          if (!data?.Page?.pageInfo?.hasNextPage) break;
+        }
+        return entries;
+      })();
+      promise.catch(() => weeklyScheduleCache.delete(key));
+      weeklyScheduleCache.set(key, promise);
+    }
+    return weeklyScheduleCache.get(key);
+  }
+
+  const isTvWork = (media) => media?.format === 'TV'
+    && !(media.genres || []).includes('Hentai')
+    && !EXCLUDED_ORIGIN_COUNTRIES.has(media.countryOfOrigin);
+
   async function getWeeklyRatings(endDate) {
     const { startDate, endDate: normalizedEndDate } = getBroadcastWeekRange(endDate);
+    const todayJst = formatDate(new Date(Date.now() + 9 * 60 * 60 * 1000));
+    const reachesToday = normalizedEndDate >= todayJst; // 선택한 주가 오늘 이후까지 걸치면 현재 방영 목록도 합친다
+    const isPastWeek = normalizedEndDate < todayJst;
 
     try {
-      const mediaList = await fetchAllPages(WEEKLY_QUERY, {}, WEEKLY_MAX_PAGES);
+      const entries = await fetchWeeklySchedule(startDate, normalizedEndDate);
 
-      if (mediaList.length === 0) {
-        throw new Error('AniList에서 현재 방영 중인 애니메이션 데이터를 찾을 수 없습니다.');
+      // 작품마다 그 주의 첫 방송 일정을 대표로 쓴다(요일/시간 계산용).
+      const mediaById = new Map();
+      const firstAiringById = new Map();
+      entries.forEach((entry) => {
+        if (!isTvWork(entry.media)) return;
+        mediaById.set(entry.media.id, entry.media);
+        if (!firstAiringById.has(entry.media.id)) firstAiringById.set(entry.media.id, entry.airingAt);
+      });
+
+      // 일정 정보가 없는 장수 방송도 놓치지 않도록, 오늘 이후까지 걸친 주에는 방영 중 목록을 합친다.
+      if (reachesToday) {
+        const releasing = await fetchAllPages(WEEKLY_QUERY, {}, WEEKLY_MAX_PAGES);
+        releasing.forEach((media) => {
+          if (!mediaById.has(media.id)) mediaById.set(media.id, media);
+        });
       }
 
-      const syoboiIndex = await loadSyoboiIndex();
-      const items = assignPopularityRanks(mediaList.map((media) => mapToWeeklyItem(media, syoboiIndex)));
+      if (mediaById.size === 0) {
+        throw new Error('AniList에서 해당 주의 방영 데이터를 찾을 수 없습니다.');
+      }
+
+      // 편성표 스냅샷(방송사 보충)은 최근 주에만 의미가 있다.
+      const weekEndMs = jstDayStartMs(normalizedEndDate);
+      const useSyoboi = Date.now() - weekEndMs < SYOBOI_FRESH_DAYS * 24 * 60 * 60 * 1000;
+      const syoboiIndex = useSyoboi ? await loadSyoboiIndex() : null;
+
+      const items = assignPopularityRanks(
+        [...mediaById.values()].map((media) => {
+          const airingAt = firstAiringById.get(media.id);
+          // 그 주 일정이 있으면 그 시각을 요일/시간 계산에 쓰도록 nextAiringEpisode 자리에 넣는다.
+          const withSlot = typeof airingAt === 'number' ? { ...media, nextAiringEpisode: { airingAt } } : media;
+          const item = mapToWeeklyItem(withSlot, syoboiIndex);
+
+          if (typeof airingAt === 'number') {
+            // 이 주에 실제 방송된 작품: 상태 점은 "방영 중", 단 지금은 이미 종영했다면 그렇게 표시한다.
+            if (media.status === 'FINISHED' || media.status === 'CANCELLED') {
+              item.airingState = {
+                state: isPastWeek ? 'airing' : 'ended',
+                reason: isPastWeek ? '선택한 주에 방송됨' : '이번 주 방송 후 방영 종료(AniList 상태: 종영)'
+              };
+            } else if (isPastWeek) {
+              item.airingState = { state: 'airing', reason: '선택한 주에 방송됨' };
+            }
+          }
+          return item;
+        })
+      );
       const { days, unscheduled } = buildWeeklyRatingDays(startDate, normalizedEndDate, items);
 
       return { source: 'anilist', period: { startDate, endDate: normalizedEndDate }, days, unscheduled };

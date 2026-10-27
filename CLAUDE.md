@@ -52,7 +52,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ### `anilistClient.js` 핵심 로직과 한계
 
-- GraphQL POST 요청 하나로 모든 쿼리를 보낸다(REST 페이지네이션과 달리 `Page(page, perPage){ pageInfo{ hasNextPage } media{...} }` 형태). 요일별은 `status: RELEASING, format: TV, sort: POPULARITY_DESC`, 신작은 `season`/`seasonYear` 필터를 쓴다.
+- GraphQL POST 요청 하나로 모든 쿼리를 보낸다(REST 페이지네이션과 달리 `Page(page, perPage){ pageInfo{ hasNextPage } media{...} }` 형태). 요일별은 **선택한 주(기준 날짜 포함 7일)의 방송 일정(`airingSchedules`)**에서 TV 작품을 받고(아래 "요일별 방영 목록의 날짜 기준" 참고), 오늘 이후까지 걸친 주에는 `status: RELEASING, format: TV, sort: POPULARITY_DESC` 목록을 합친다, 신작은 `season`/`seasonYear` 필터를 쓴다.
 - **Rate Limit이 낮다**(직접 확인: 응답 헤더 `X-RateLimit-Limit: 30`, 분당 약 30회). 그래서 이 클라이언트가 내보내는 모든 요청은 모듈 전역 큐(`scheduleRequest`)를 거쳐 최소 `MIN_REQUEST_INTERVAL_MS`(2.1초) 간격으로 순차 실행된다 — 요일별/신작 조회가 `Promise.all`로 동시에 호출돼도 실제 네트워크 요청은 겹치지 않는다. 이 큐 때문에 AniList를 기본 소스로 첫 로딩할 때 다른 소스보다 체감 로딩이 느릴 수 있다(정상 동작).
 - **중요한 한계(직접 확인함, 코드로 보완 불가)**: AniList `Media` 타입은 '인기 순위(rank)' 필드를 주지 않는다(`popularity`는 리스트에 담은 유저 수 집계일 뿐). `assignPopularityRanks()`가 지금 가져온 배치(요일별 최대 150건, 검색 최대 10건) 안에서 popularity 내림차순으로 정렬해 순번을 매겨 근사치 "인기도 순위"를 만든다 — MAL/전체 데이터베이스 기준 순위가 아니다.
 - **AniList에는 TV 방송사(방송국) 전용 필드가 없다** — `broadcastStation`은 항상 `'정보 없음'`으로 고정.
@@ -85,6 +85,15 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - **검색(`searchAnimeByTitle`)**: `/anime?q=` 사용, 정확히 일치하지 않아도 유사도 기반 결과를 그대로 반환(별도 유사도 계산 없음). API 실패 시 다른 기능과 달리 **Mock 데이터로 대체하지 않고** 명확한 에러 메시지를 반환한다(검색은 특정 검색어에 대한 응답이라 무관한 Mock을 보여주면 오도하게 됨) — 이 원칙은 세 클라이언트 모두 동일하다.
 - **날짜 연산**: 문자열 파싱은 항상 `Date.UTC`/`getUTC*`로 처리한다(`app.js`/다른 두 클라이언트도 동일 원칙). `new Date('YYYY-MM-DD')` + 로컬 getter 조합은 방문자 브라우저 타임존에 따라 하루 밀리는 버그를 낸 적이 있음 — 새 날짜 로직 추가 시 이 패턴을 반복하지 말 것.
 - **Mock 폴백**: 이 클라이언트 자체가 실패했을 때만 사용(요일별/신작). 다른 소스로 자동 전환되지 않는다. Mock 데이터의 공식 사이트/커버 이미지 링크는 실제 존재를 확인한 URL만 사용한다(가짜 도메인 금지).
+
+### 요일별 방영 목록의 날짜 기준(AniList `getWeeklyRatings`)
+
+- **기준 날짜를 바꾸면 그 주(기준 날짜 포함 7일)에 실제 방송된 TV 작품**을 보여준다. AniList `Page.airingSchedules(airingAt_greater, airingAt_lesser)`로 그 7일(JST) 안의 방송 일정을 받아 `format === 'TV'`만 남기고(Hentai·중국 제외), 작품별 그 주의 첫 방송 시각으로 방영 요일/시간을 계산한다(`nextAiringEpisode` 자리에 넣어 기존 매핑 재사용). 주당 약 3페이지(요청 3번), 주별 결과는 `weeklyScheduleCache`에 캐시한다.
+- **과거에는 `status: RELEASING`(지금 방영 중)만 받아서 두 가지 문제가 있었다**: ① 기준 날짜를 바꿔도 같은 목록(요일 배치만 달라짐)이 나왔다, ② 마지막 화를 방송한 작품은 AniList 상태가 바로 `FINISHED`가 되어 **그 주 목록에서 사라졌다**(예: BLEACH 禍進譚은 2026-10-27 최종화 방송 직후 사라짐). 지금은 최종화가 방송된 주에도 포함되고 상태 점이 빨강("이번 주 방송 후 방영 종료")이다.
+- 선택한 주가 **오늘 이후까지 걸치면** 방송 일정이 없는 장수 방송(짱구·사자에상 등)도 있으므로 `RELEASING` 목록을 합친다(중복 제거). 완전히 지난 주에는 일정이 등록된 작품만 나온다(예: 2026-07-01 주 37건, 지난주 65건, 이번 주 72건). AniList에 일정이 없는 작품은 지난 주 조회에서 빠진다.
+- **평점·인기도·즐겨찾기는 조회 시점의 현재 값**이다(지난 시점 값 아님). 지난 주 상태 점은 "선택한 주에 방송됨"(초록)이다.
+- Syoboi 방송사 보충은 주 종료일이 14일 이내일 때만 한다(`SYOBOI_FRESH_DAYS`; 그보다 오래된 주는 현재 편성표와 맞지 않아 쓰지 않음).
+- **Kitsu/Jikan은 날짜 조건을 지원하지 않고 항상 "지금 방영 중" 목록**이다. 오늘이 포함되지 않은 주를 고르면 `updatePeriodDisplay`가 "이 데이터 소스는 지난 날짜를 지원하지 않아…" 안내를 붙인다. 분기 신작(TV) 탭은 원래 기준 날짜가 속한 분기(시즌) 전체를 보여준다.
 
 ### 분기 신작 (ONA 등) 탭(`getNonTvSeasonal` / `onaApp.js`)
 

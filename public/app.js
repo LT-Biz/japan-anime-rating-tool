@@ -128,6 +128,7 @@ sourceButtons.forEach((btn) => {
     if (!source || source === activeSource) return;
     activeSource = source;
     sourceButtons.forEach((b) => b.classList.toggle('active', b.dataset.source === activeSource));
+    updatePeriodDisplay(dateInput.value); // 소스에 따라 날짜 지원 안내 문구가 달라진다
     fetchAnimeData(dateInput.value);
   });
 });
@@ -238,6 +239,12 @@ function updatePeriodDisplay(baseDateStr) {
   const endStr = formatDate(endDate);
 
   periodDisplay.textContent = `조회 기간: ${startStr} ~ ${endStr} (7일간)`;
+
+  // AniList만 선택한 주의 방영분을 받는다. Kitsu/Jikan은 날짜 조건 없이 "지금 방영 중" 목록만 줘서, 오늘이
+  // 포함되지 않은 주를 고르면 날짜와 무관한 목록이 나온다는 점을 알려준다.
+  if (activeSource !== 'anilist' && formatDate(endDate) < formatDate(new Date())) {
+    periodDisplay.textContent += ' · 이 데이터 소스는 지난 날짜를 지원하지 않아 현재 방영 중인 작품이 표시됩니다(AniList는 선택한 주의 방영분을 보여줍니다).';
+  }
 }
 
 function switchTab(tabId) {
