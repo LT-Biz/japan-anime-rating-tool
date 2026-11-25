@@ -2,140 +2,54 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+세부 규칙은 `.claude/rules/`에 파일별로 나뉘어 있고, 해당 경로의 파일을 읽을 때 자동으로 로드된다(anilist / kitsu-syoboi / jikan / books-webnovel / ui). 이 문서에는 항상 지켜야 할 것만 둔다.
+
 ## Overview
 
-일본 애니메이션 방영 정보(요일별 편성, 신작, 검색)와 일본 만화·라이트노벨 순위(IP 발굴용)를 보여주는 **완전한 정적 웹사이트**("일본 애니메이션 방영 정보"). 빌드 도구·프레임워크·백엔드 API 없이 Vanilla JS/CSS로 작성되어 있고, 브라우저가 세 데이터 소스 클라이언트(`public/anilistClient.js`/`public/kitsuClient.js`/`public/jikanClient.js`)를 통해 각 API를 **직접** 호출한다. 셋 다 `Access-Control-Allow-Origin: *`를 응답하므로 별도 백엔드 프록시 없이 브라우저에서 바로 호출 가능하다(직접 curl로 확인).
+일본 애니메이션 방영 정보(요일별 편성, 신작, 검색)와 일본 만화·라이트노벨·웹소설 순위(IP 발굴용)를 보여주는 **완전한 정적 웹사이트**. 빌드 도구·프레임워크·백엔드 API 없이 Vanilla JS/CSS로 작성되어 있고, 브라우저가 세 데이터 소스 클라이언트(`public/anilistClient.js`/`kitsuClient.js`/`jikanClient.js`)로 각 API를 **직접** 호출한다(셋 다 `Access-Control-Allow-Origin: *`).
 
-**데이터 소스는 사용자가 화면 상단 버튼으로 직접 고른다** — [AniList GraphQL API](https://docs.anilist.co/) / [Kitsu API](https://kitsu.docs.apiary.io/) / [Jikan REST API v4](https://docs.api.jikan.moe/)(MyAnimeList 비공식 오픈 API) 순서로 버튼이 나열되며, 기본값(최초 진입 시)은 **AniList**다. 과거에는 "Jikan 실패 시 Kitsu로 자동 대체"하는 폴백 체인이었지만, 지금은 그 구조를 걷어내고 세 클라이언트가 완전히 독립적으로 동작한다 — 선택한 API 호출이 실패하면 그 API 자체의 Mock 데이터로만 대체되고, 다른 API를 대신 호출하지 않는다.
+**데이터 소스는 사용자가 화면 상단 버튼으로 직접 고른다**(AniList → Kitsu → Jikan 순, 기본값 **AniList**). 세 클라이언트는 완전히 독립적이다 — 선택한 API가 실패하면 그 API 자체의 Mock으로만 대체하고 다른 API를 대신 호출하지 않는다.
 
-`server.js`는 로컬 미리보기용 정적 파일 서버일 뿐이며, 배포 시에는 `public/` 폴더만 있으면 된다(GitHub Pages, Netlify 등 아무 정적 호스팅에 그대로 올릴 수 있음). 이 프로젝트에 백엔드 API 레이어(예: `services/`, `/api/*` 라우트)를 다시 추가하지 말 것 — 과거에 있었으나 전량 클라이언트 사이드로 이전하며 제거되었다.
+`server.js`는 로컬 미리보기용 정적 서버일 뿐이며 배포에는 `public/`만 있으면 된다.
 
-**중요**: Claude 자체의 Artifact 게시 기능으로는 이 앱을 배포할 수 없다 — Artifact 샌드박스의 CSP가 허용 목록에 없는 외부 도메인으로의 `fetch`/`XHR`를 전면 차단하므로(`api.jikan.moe`/`kitsu.io`/`graphql.anilist.co` 모두 허용 목록에 없음), Artifact에 게시하면 API 호출이 조용히 실패해 Mock 데이터만 보이게 된다. 반드시 GitHub Pages/Netlify Drop/Vercel 등 실제 정적 호스팅에 `public/` 폴더를 배포해야 한다.
+## 항상 지킬 규칙
+
+- **백엔드 API 레이어(`services/`, `/api/*` 라우트)를 다시 추가하지 말 것** — 전량 클라이언트 사이드로 이전하며 제거됐다.
+- **Claude Artifact 게시로는 배포할 수 없다** — Artifact 샌드박스 CSP가 `api.jikan.moe`/`kitsu.io`/`graphql.anilist.co` 호출을 차단해 Mock만 보인다. GitHub Pages/Netlify/Vercel 등 실제 정적 호스팅에 `public/`를 배포한다.
+- **JS/CSS는 `vercel.json`에서 immutable 장기 캐시**다. `public/*.js`/`style.css`를 고치면 `index.html`의 `?v=` 쿼리를 올려야 사용자에게 반영된다. 단, **데이터 파일(`syoboi-schedule.js`, `webnovel-ranking.js`)에는 `?v=`/immutable 캐시를 붙이지 않는다**(매일 바뀜).
+- 세 클라이언트는 **서로를 호출하지 않는다**. 공통 유틸(날짜/요일 변환 등)은 각자 중복 구현하는 것이 프로젝트 관례다(예외: 데이터 유틸 `syoboiSchedule.js`).
+- 날짜 문자열 파싱은 항상 `Date.UTC`/`getUTC*`로 한다(`new Date('YYYY-MM-DD')` + 로컬 getter는 타임존에 따라 하루 밀린다).
+- 정적 데이터 스냅샷(Syoboi, 웹소설)은 JSON+`fetch`가 아니라 **`window.X = {...}`를 대입하는 JS 파일 + `<script src>`**다(`file://`에서 fetch가 막힘). 되돌리지 말 것.
+- **`category`(카테고리)는 값은 채우되 화면에는 표시하지 않는다**(사용자 요청). 새 렌더링에서 다시 노출하지 말 것.
+- 값이 없는 지표/필드는 항목을 숨기지 말고 "정보 없음"으로 표시한다.
+- 각 탭 제목 옆 상태 배지(`updateSourceStatus`: 실시간 초록/Mock 주황/오류 빨강)를 새 소스·탭에서도 빠뜨리지 말 것.
+- 요일별 표의 `RATING_COLUMNS` / `RATING_SORTABLE_HEADERS` / `createRatingRow` **세 곳의 셀 순서를 항상 맞출 것**(어긋나면 정렬·고정 컬럼 오프셋이 깨진다).
+- `.hidden`과 함께 쓰는 컴포넌트에 자체 `display` 규칙을 추가할 때는 `.컴포넌트.hidden { display: none; }` override 규칙을 함께 추가한다(안 하면 투명 오버레이가 클릭을 가로채는 회귀가 있었다).
+- 비밀값(Vercel Deploy Hook URL `VERCEL_DEPLOY_HOOK_URL`, API 키)은 코드/채팅에 쓰지 말고 GitHub Secrets에만 둔다.
+- 오리콘 등 데이터 전재가 금지된 곳은 가져오지 않는다(링크만 가능). 카쿠요무는 개인 확인용으로만 쓴다.
+- Git: 기존 작업은 별도 브랜치에서 하고, 푸시/master 병합은 사용자가 명시적으로 요청할 때만 한다(master 푸시 = Vercel 프로덕션 배포).
 
 ## Commands
 
 - 의존성 설치: `npm install`
-- 로컬 미리보기: `npm start` (http://localhost:3000, 단순 정적 파일 서빙)
-- 개발 모드(파일 변경 감지 자동 재시작): `npm run dev`
+- 로컬 미리보기: `npm start` (http://localhost:3000), 개발 모드: `npm run dev`
+- 배포 빌드: `npm run build` (= Syoboi 편성표 + 웹소설 스냅샷 갱신, `--soft`라 실패해도 빌드는 성공)
+- 수동 갱신: `npm run build:syoboi`, `npm run build:webnovel`
 
-빌드 단계나 테스트 스위트는 없다. `public/*.js` 파일을 수정한 뒤에는 `node -c public/파일명.js`로 문법만 빠르게 확인하고, 브라우저(Claude in Chrome 등)로 실제 렌더링/네트워크 요청을 확인하는 것이 유일한 검증 수단이다.
+테스트 스위트는 없다. `public/*.js`를 고친 뒤 `node -c public/파일명.js`로 문법만 확인하고, 브라우저(Claude in Chrome 등)로 실제 렌더링/네트워크 요청을 확인하는 것이 유일한 검증 수단이다.
 
-## Architecture
+## Architecture (파일 한 줄 요약)
 
-- `public/anilistClient.js` — [AniList GraphQL API](https://docs.anilist.co/)(https://graphql.anilist.co, 단일 POST 엔드포인트) 클라이언트. **기본(최초) 데이터 소스**. IIFE로 감싸 `window.AniListClient`에 `getWeeklyRatings(endDate)`, `getNewReleases(endDate)`, `searchAnimeByTitle(title)`, `checkStatus()` 네 함수를 노출한다(다른 두 클라이언트와 완전히 동일한 시그니처).
-- `public/kitsuClient.js` — [Kitsu API](https://kitsu.docs.apiary.io/) 클라이언트. `window.KitsuClient`에 AniList/Jikan과 동일한 시그니처를 노출한다. JSON:API 포맷(`included` 배열 + relationships 포인터)이라 스튜디오/장르/카테고리 이름을 얻으려면 `include=` 파라미터로 관계를 같이 가져와 직접 조인해야 한다(`buildIncludedIndex`/`resolveRelationshipList` 참고).
-- `public/jikanClient.js` — Jikan REST API v4(MyAnimeList 비공식 오픈 API) 클라이언트. `window.JikanClient`에 동일한 시그니처를 노출한다.
-- 세 클라이언트는 **서로를 호출하지 않는다** — 각자 자기 API 호출에 실패하면(요일별/신작은) 자체 Mock 데이터로, (검색은) 명확한 에러로 대체할 뿐이다. 어떤 API를 쓸지는 오직 `app.js`의 `activeSource` 상태(사용자가 상단 버튼으로 선택)가 결정한다. 세 파일은 프로젝트 관례대로 날짜/요일 변환 등 공통 유틸을 각자 중복 구현한다(공유 모듈 없음).
-- `public/app.js` — DOM 렌더링과 이벤트 처리. `CLIENT_GETTERS`로 세 클라이언트 중 `activeSource`에 해당하는 것을 골라 호출하고, 그 반환값을 받아 화면을 그리기만 한다. 각 탭 제목 옆 상태 배지(`updateSourceStatus`)로 실시간 연동/Mock 대체/오류 여부를 표시하고, 상단 소스 버튼 옆 점(`updateSourceDot`)으로 각 API의 생존 여부를 표시한다.
-- `public/index.html` — 3개 탭 구조: 요일별 방영 애니메이션 / 분기 신작 애니메이션 / 애니메이션 검색. `<script>` 로드 순서는 `anilistClient.js` → `kitsuClient.js` → `jikanClient.js` → `app.js`(세 클라이언트끼리는 서로 호출하지 않으므로 상호 순서 자체는 무관하지만, 화면 버튼 순서와 맞춰뒀다).
-- `public/style.css` — 외부 UI 라이브러리 없는 Vanilla CSS. 컨테이너는 `width:100%`로 브라우저 폭에 동적으로 맞춘다(고정 `max-width` 없음).
-- `public/multiSelect.js` — 여러 개를 동시에 고르는 필터 드롭다운 공용 모듈(`window.MultiSelect.create({ id, options, onChange })`, `<details>` + 체크박스). 아무것도 고르지 않으면 "전체"(필터 없음)이고, 고른 값 중 **하나라도 맞으면 통과(OR)**하며 서로 다른 필터끼리는 AND다. `booksApp.js`(애니화·연재 상태)와 `webNovelApp.js`(장르·상태)가 쓴다. 이 두 파일보다 먼저 로드해야 한다. `setOptions`는 사라진 옵션을 선택에서 빼지만 `onChange`는 부르지 않는다(호출한 쪽이 `getValues()`로 상태를 맞춘다).
-- `public/onaApp.js` — **분기 신작 애니메이션 (ONA 등)** 탭(`#ona`). 아래 "분기 신작 (ONA 등) 탭" 항목 참고.
-- `public/booksApp.js` — 상단 화면 전환(`.mode-btn`: 애니메이션 방영 정보 / 만화·소설 순위 정보, `#animeMode`/`#booksMode`)과 **만화·소설 순위 화면**. 애니메이션 쪽(데이터 소스 버튼, 기준 날짜, 3개 탭)과 완전히 별개이며 AniList만 쓴다(`AniListClient.getBookRanking(type, sortKey)`, `type`은 `'MANGA'|'NOVEL'`). `app.js`의 표 셀 헬퍼와 `setupInfoPopup`/`updateSourceStatus`/`getTitleColumnWidth`를 재사용하므로 `app.js` 뒤에 로드한다. 아래 "만화·소설 순위" 항목 참고.
-- `scripts/build-webnovel.js` + `public/webnovel-ranking.js` + `public/webNovelApp.js` — 웹소설 랭킹(소설가가 되자/카쿠요무) 주간·월간 상위 300건 스냅샷 생성 스크립트, 그 산출물(`window.WEBNOVEL_RANKING`), 화면. `booksApp.js`의 탭(만화/라이트노벨/소설가가 되자/카쿠요무)이 `books:tab` 이벤트로 탭 변경을 알리면 `webNovelApp.js`가 자기 패널(`#webNovelPanel`)을 보이거나 숨긴다(자세한 내용은 아래 "웹소설 랭킹" 항목).
-- `public/syoboiSchedule.js` — Syoboi 편성표 매칭/병합 공용 모듈(`window.SyoboiSchedule`). `anilistClient.js`/`kitsuClient.js`가 사용한다(자세한 내용은 아래 `kitsuClient.js` 항목).
-- `scripts/build-syoboi.js` + `public/syoboi-schedule.js` — Kitsu 방영 정보 보충용 정적 편성표 생성 스크립트와 그 산출물(자세한 내용은 아래 `kitsuClient.js` 항목). 백엔드가 아니라 개발자가 수동/CI로 돌리는 오프라인 스크립트다.
-- `server.js` — `express.static`으로 `public/`만 서빙하는 로컬 미리보기 서버. API 라우트 없음.
+- `public/index.html` — 3개 탭(요일별 / 분기 신작 TV / 분기 신작 ONA 등 / 검색) + 상단 모드 전환(애니메이션 / 만화·소설 순위). `<script>` 순서: `syoboiSchedule.js` → `anilistClient.js` → `kitsuClient.js` → `jikanClient.js` → `app.js`; `multiSelect.js`는 `booksApp.js`/`webNovelApp.js`/`onaApp.js`보다 먼저, `booksApp.js`는 `app.js` 뒤.
+- `public/anilistClient.js` / `kitsuClient.js` / `jikanClient.js` — 각 API 클라이언트. `window.AniListClient`/`KitsuClient`/`JikanClient`가 `getWeeklyRatings(endDate)`, `getNewReleases(endDate)`, `searchAnimeByTitle(title)`, `checkStatus()`를 **동일 시그니처**로 노출한다.
+- `public/app.js` — DOM 렌더링/이벤트. `CLIENT_GETTERS`로 `activeSource`에 해당하는 클라이언트를 골라 호출하고 결과를 그리기만 한다. 상단 소스 버튼 옆 점(`updateSourceDot`)은 각 API 생존 여부 진단.
+- `public/onaApp.js` — 분기 신작 (ONA 등) 탭. `public/booksApp.js` — 만화·소설 순위 화면(AniList 전용). `public/webNovelApp.js` — 웹소설 랭킹 화면.
+- `public/multiSelect.js` — 다중 선택 필터 공용 모듈(`window.MultiSelect.create({ id, options, onChange })`). 아무것도 안 고르면 전체, 한 필터 안에서는 OR, 서로 다른 필터끼리는 AND. `setOptions`는 `onChange`를 부르지 않는다(호출한 쪽이 `getValues()`로 맞춘다).
+- `public/syoboiSchedule.js` — Syoboi 편성표 매칭/병합 공용 모듈. `public/tablePan.js` — 표 드래그 이동.
+- `scripts/build-syoboi.js` → `public/syoboi-schedule.js`, `scripts/build-webnovel.js` → `public/webnovel-ranking.js` — 오프라인 스냅샷 생성 스크립트와 산출물. `.github/workflows/refresh-syoboi.yml`이 매주 월요일 04:00 JST에 Vercel Deploy Hook을 호출해 재배포(→ 스냅샷 갱신)한다.
+- `public/style.css` — 외부 UI 라이브러리 없는 Vanilla CSS. 컨테이너는 `width:100%`.
+- `server.js` — `express.static`으로 `public/`만 서빙. API 라우트 없음.
 
 ### 공통 데이터 필드
 
-세 클라이언트 모두 요일별/신작/검색 항목에 다음 필드를 채운다(값이 없으면 `null`/빈 배열/`'정보 없음'`):
-
-- `category` — 작품 형태(TV/극장판/OVA/ONA/스페셜/뮤직 등). 각 클라이언트에 동일한 모양의 `CATEGORY_LABELS` 맵과 `formatCategory()`가 중복 구현돼 있다(Jikan `anime.type`, Kitsu `attrs.subtype`, AniList `media.format`을 소스로 함).
-- `genres` — 장르 배열.
-- `themes` — 테마/소재 태그 배열(최대 5개 정도로 자름). Jikan은 `themes`+`demographics`, Kitsu는 `categories` 관계(장르보다 더 세분화된 태그), AniList는 `tags`(스포일러 태그 제외, rank 상위 5개)를 사용 — API마다 성격이 달라 완전히 대응되는 개념은 아니다.
-- `coverImage` — 커버 이미지 URL(없으면 `null`). `app.js`의 `createCoverCell`/`createAnimeCard`가 40×56(표)·64×90(카드) 축소본으로 렌더링하고, 클릭하면 `openImageModal()`로 원본을 팝업(`#imageModal`)에 띄운다.
-
-- `category`(카테고리)는 세 클라이언트 모두 값은 채우지만 **화면에는 표시하지 않는다**(요일별 표/신작 표/검색 카드에서 "카테고리" 컬럼·필드를 모두 제거함 — 사용자 요청). 새 렌더링 코드를 추가할 때 이 필드를 다시 노출하지 말 것.
-
-`app.js`의 `appendTagListContent(container, item)`이 `genres`+`themes`를 합쳐 앞 4개만 텍스트로 보여주고, 남은 게 있으면 전체 목록을 보여주는 `+N` 버튼(`.tag-expand-btn`)을 붙인다 — 요일별 표의 "장르/테마" 컬럼(`createTagListCell`), 신작 표, 검색 카드(`createTagListDetailField`)가 모두 이 함수를 공유한다. 버튼을 누르면 `openTagListModal(item)`이 전체 장르(파란 칩)/테마(회색 칩) 목록을 화면 중앙 팝업(`#tagListModal`)에 띄운다 — 이미지 팝업과 달리 팝업 바깥(배경) 클릭이나 `×` 버튼으로만 닫히고, 팝업 내용 클릭으로는 닫히지 않는다(텍스트를 읽는 용도라 실수로 안 닫히게 함). `formatTagList(item)`은 렌더링용이 아니라 요일별 표의 열 너비 계산(`RATING_COLUMNS`)에서 "미리보기 텍스트 길이" 추정용으로만 남겨뒀다.
-
-### `anilistClient.js` 핵심 로직과 한계
-
-- GraphQL POST 요청 하나로 모든 쿼리를 보낸다(REST 페이지네이션과 달리 `Page(page, perPage){ pageInfo{ hasNextPage } media{...} }` 형태). 요일별은 **선택한 주(기준 날짜 포함 7일)의 방송 일정(`airingSchedules`)**에서 TV 작품을 받고(아래 "요일별 방영 목록의 날짜 기준" 참고), 오늘 이후까지 걸친 주에는 `status: RELEASING, format: TV, sort: POPULARITY_DESC` 목록을 합친다, 신작은 `season`/`seasonYear` 필터를 쓴다.
-- **Rate Limit이 낮다**(직접 확인: 응답 헤더 `X-RateLimit-Limit: 30`, 분당 약 30회). 그래서 이 클라이언트가 내보내는 모든 요청은 모듈 전역 큐(`scheduleRequest`)를 거쳐 최소 `MIN_REQUEST_INTERVAL_MS`(2.1초) 간격으로 순차 실행된다 — 요일별/신작 조회가 `Promise.all`로 동시에 호출돼도 실제 네트워크 요청은 겹치지 않는다. 이 큐 때문에 AniList를 기본 소스로 첫 로딩할 때 다른 소스보다 체감 로딩이 느릴 수 있다(정상 동작).
-- **중요한 한계(직접 확인함, 코드로 보완 불가)**: AniList `Media` 타입은 '인기 순위(rank)' 필드를 주지 않는다(`popularity`는 리스트에 담은 유저 수 집계일 뿐). `assignPopularityRanks()`가 지금 가져온 배치(요일별 최대 150건, 검색 최대 10건) 안에서 popularity 내림차순으로 정렬해 순번을 매겨 근사치 "인기도 순위"를 만든다 — MAL/전체 데이터베이스 기준 순위가 아니다.
-- **AniList에는 TV 방송사(방송국) 전용 필드가 없다** — `broadcastStation`은 항상 `'정보 없음'`으로 고정.
-- `nextAiringEpisode.airingAt`(UTC epoch초)에 9시간을 더하면 그대로 일본 현지(JST) 방송 시각이 된다(`resolveBroadcastSlotFromAiringAt`) — 별도 타임존 변환이 필요 없다는 것을 직접 확인함. 30시간제 관례(심야 0~5시대는 전날 요일)는 다른 두 클라이언트와 동일하게 적용.
-- 스튜디오는 `studios(isMain: true)`로 메인 스튜디오만 서버 쪽에서 걸러서 받는다(Kitsu/Jikan처럼 role 관계를 직접 거를 필요가 없어 더 간단함).
-
-- **평점 변화 그래프(`getScoreHistory`)**: 요일별 표의 평점 칸/검색 카드의 평점에 마우스를 올리면(터치는 탭) `app.js`의 `attachScoreHistory`가 팝업(`.score-history-popup`, `.hidden` override 패턴 적용)에 꺾은선 SVG를 그린다. 데이터는 AniList `Page.mediaTrends`(작품당 일 1회, JST 0시 스냅샷의 `averageScore`)를 `date_greater`로 범위 조회한 것이다(`Media.trends`에는 날짜 필터 인자가 없고, 별칭으로 여러 날짜를 한 번에 묻는 방식은 필터가 무시돼 못 씀). 방영 시작일부터 7일 간격으로 "방송 시각 + 6시간" 이후 처음 나오는 스냅샷을 고르므로 실제로는 방송 다음 날 0시 값이다(시간 단위 이력은 없음). 한 번에 최대 400일(페이지 8개)만 조회해 장기 방영작은 최근 구간만 보여주고, 값이 null인 날과 2014-12 이전은 빠진다. 이력은 AniList만 제공하므로 항목에 `anilistId`가 없으면(Kitsu/Jikan) 안내 문구만 뜬다. 결과는 `scoreHistoryCache`로 작품당 한 번만 조회한다.
-- 요일별 표에는 `방영 시작일`(`firstAirDate`, 세 클라이언트 모두 채움) 컬럼이 `방영일` 앞에 있고 정렬 기준에도 포함된다. `RATING_COLUMNS`/`RATING_SORTABLE_HEADERS`/`createRatingRow` 순서를 함께 맞출 것.
-
-- **방영 상태 점(`item.airingState = { state, reason }`)**: 요일별 표의 일본어 타이틀 앞에 초록(`airing`, 방영 중)/빨강(`hiatus`·`ended`, 휴방·종료)/회색(`unknown`, 확인 불가) 점을 그린다(`createAiringStateDot`, 점의 `title` 툴팁에 판정 근거). 각 클라이언트가 `resolveAiringState`로 추정해 채운다(Mock 항목엔 없고, 그땐 점을 안 그린다). 공통 기준: 다음 방송이 14일 안이면 방영 중, 14일보다 멀면 휴방(예: AniList에서 ONE PIECE가 73일 뒤). AniList는 `nextAiringEpisode`/`status`, Kitsu는 `nextRelease` → Syoboi 이번 주 편성 → `attributes.status === 'finished'` → 예상 종료일 순, Jikan은 MAL 상태 + 예상 종료일(시작일+(총회차-1)주+28일)만 쓴다. **Kitsu의 `attributes.status`는 날짜로 계산된 값이라 `filter[status]=current` 목록에 들어온 항목도 `finished`일 수 있다**(직접 확인: 요일별 242건 중 101건) — 그래서 Kitsu 목록은 종료 작품이 많이 섞여 나온다. 일정 정보가 전혀 없는 장수 방송(사자에상, 도라에몽, 마루코 등)은 실제로는 방송 중이어도 '확인 불가'(회색)로 남는다. 신작 탭/검색에는 적용하지 않았다.
-
-### `kitsuClient.js` 핵심 로직과 한계
-
-- **중요한 데이터 한계(직접 확인함, 코드로 보완 불가)**: Kitsu의 방영 일정 필드(`nextRelease`)는 원피스·명탐정 코난·짱구처럼 계속 이어지는 상시 연재작에만 주로 채워져 있다(인기 상위 20개 현재 방영작 중 3개만 값이 있었음). 그래서 Kitsu를 선택하면 요일별 방영 탭은 상당수 작품이 `broadcastDayKorean: null`(→ `unscheduled`)로 몰린다 — 버그가 아니라 Kitsu 데이터 자체의 한계이니, "왜 요일별로 안 나뉘지"라는 리포트가 오면 이 문서를 먼저 참고할 것.
-- `genres` 관계(attributes.name)와 `categories` 관계(attributes.title)는 서로 다른 속성 키를 쓴다는 것을 직접 확인함 — `extractGenres`/`extractThemes`가 각각 다른 키를 읽는 이유. `categories`가 genres보다 더 세분화된 태그(예: Pirate, Swordplay)라 '테마' 항목으로 매핑했다.
-- 스튜디오/장르/카테고리 관계(`animeProductions`/`genres`/`categories`)도 최신/비주류 작품일수록 Kitsu 쪽에 비어 있는 경우가 많다(One Piece처럼 오래되고 유명한 항목은 풍부하지만, 신작은 종종 빈 배열) — `extractStudio`/`extractBroadcastStation`이 이미 "미지정(Unknown)"/"정보 없음"으로 안전하게 처리하므로 별도 조치 불필요.
-- Kitsu는 `filter[startDate]` 같은 날짜 범위 서버 필터를 지원하지 않는다(직접 확인: `400 Filter not allowed`). `getNewReleases`는 서버 쪽 시즌 필터(`filter[season]`+`filter[seasonYear]`+`filter[subtype]=TV`)로 분기 전체를 받는다 — 예전의 `filter[status]=current`+`sort=-startDate` 방식은 offset 20 구간 20건이 통째로 누락돼 신작이 빠지는 문제가 있었다(평점 유무와 무관). 수집 건수가 `meta.count`보다 적으면 콘솔에 경고를 남긴다.
-- 페이지 크기 상한은 Jikan(25)과 다르게 **20**이다(`page[limit]` 21 이상이면 400 에러). 다만 20으로 받으면 offset 20 구간이 앞 페이지와 중복돼 일부가 누락되는 것을 직접 확인해서 `KITSU_PAGE_SIZE`는 **10**으로 쓴다(그래서 `WEEKLY_MAX_PAGES`/`NEW_RELEASES_MAX_PAGES`도 40/20으로 키움). 페이지 크기를 되돌리지 말 것.
-- 공식 사이트에 대응하는 필드가 없어 Kitsu 자신의 페이지(`https://kitsu.io/anime/{slug}`)를 대체 링크로 쓴다 — 화면 상 라벨은 "정보 보기"(Kitsu 링크는 진짜 공식 사이트가 아니라 대체 링크라 라벨을 일반화함).
-- **`filter[status]=current` 목록은 일부 작품을 빼먹는다(직접 확인)**: 예) 桃源暗鬼 日光・華厳の滝編은 `attributes.status`가 `current`인데도 이 필터 결과에 없다. 그래서 `getWeeklyRatings`는 이 목록에 **이번 분기 시즌 필터 결과 중 `status === 'current'`인 항목을 합쳐서** 쓴다. 신작은 시즌 필터만 쓴다.
-- **Syoboi 편성 병합(AniList·Kitsu 공용)**: AniList는 방송사 필드가 없고 Kitsu는 요일/시간/방송사가 거의 비어 있어 [Syoboi Calendar](https://cal.syoboi.jp)로 보충한다. Syoboi는 CORS 헤더가 없어 브라우저에서 직접 못 부르므로 `npm run build:syoboi`(`scripts/build-syoboi.js`)가 앞으로 8일 치 편성을 받아 `public/syoboi-schedule.js`으로 저장해 둔다 **데이터 파일은 JSON이 아니라 `window.SYOBOI_SCHEDULE = {...}`를 대입하는 JS 파일이고 `<script src>`로 로드한다 — `fetch()`는 `index.html`을 파일(`file://`)로 직접 열면 브라우저가 막아 방송사가 비어 보이기 때문이다(`index.html`에서 이 스크립트에는 `?v=` 쿼리/immutable 캐시를 붙이지 않는다: 매일 바뀌는 데이터). 다시 JSON/fetch로 되돌리지 말 것.** (**페이지 로딩 때 Syoboi를 가져오는 게 아니다** — 이 파일을 주기적으로 다시 만들어 배포해야 하고, 28일 넘게 지난 파일은 클라이언트가 무시한다). **자동 갱신**: `vercel.json`의 `buildCommand`가 `npm run build`(= `node scripts/build-syoboi.js --soft`)이므로 Vercel이 배포할 때마다 편성표를 새로 받아 함께 올린다. `--soft`는 Syoboi 장애/빈 응답/타임아웃에도 빌드를 실패시키지 않고 저장소의 기존 파일을 그대로 쓰게 한다(결과가 0건이면 파일을 덮어쓰지 않음). 배포 주기는 `.github/workflows/refresh-syoboi.yml`이 매주 월요일 04:00 JST에 Vercel Deploy Hook(GitHub Secret `VERCEL_DEPLOY_HOOK_URL`)을 호출해 만든다(수동 실행도 가능). 코드 푸시로 배포돼도 같은 빌드가 돈다. 조회 범위는 주 1회 갱신을 감안해 14일 치(`LOOKAHEAD_DAYS`). Hook URL은 비밀값이라 코드/채팅에 쓰지 말 것. 공개 저장소는 60일간 활동이 없으면 GitHub가 스케줄 워크플로를 자동으로 끄므로, 갱신이 멈추면 Actions 탭에서 다시 켠다. 매칭/병합 로직은 공용 모듈 `public/syoboiSchedule.js`(`window.SyoboiSchedule`, `anilistClient.js`/`kitsuClient.js`보다 먼저 로드)에 있다 — 프로젝트 관례상 클라이언트끼리는 코드를 공유하지 않지만, 이 모듈은 API 클라이언트가 아니라 데이터 유틸이고 로직이 길어 예외로 공유한다. 매칭은 **일본어 제목**(AniList `title.native`, Kitsu `titles.ja_jp`) 기준이며 3단계다: ①정규화한 제목 완전 일치 (`normalizeTitle`: NFKC, 기호·공백 제거, `第2期`/`Season2`/`2nd Season`/`第2クール`→`s2`, `(2005)` 제거) ②시즌 표기를 지우고 일치 ③한쪽이 다른 쪽의 접두일 때(6자 이상, 부제 차이) — 모두 시작 연월이 24개월(③은 12개월) 넘게 다르면 다른 작품으로 버린다. 병합 규칙(`mergeBroadcast`): 그 API가 요일/시간을 알면 그대로 두고 **같은 요일·시간 슬롯을 가진 Syoboi 방송국**을 방송사로 채운다(없으면 첫 방송국과 일치하는 슬롯일 때만); 요일이 없으면 Syoboi 슬롯을 그대로 쓴다. 파일이 없거나 오래돼도 각 API 데이터만으로 정상 동작한다. 요일별 탭과 검색에만 적용(신작 탭은 방영 시각 컬럼이 없음). 방송사는 Syoboi 표기 그대로 일본어다(예: 日本テレビ). 측정(2026-10-22): AniList 72건 중 59건, 방송사 채움. 한계: Syoboi에 이번 주 편성이 없는 장수 방송(짱구·사자에상·도라에몽 등)과 표기가 아예 다른 작품은 매칭되지 않는다. **JS/CSS는 `vercel.json`에서 immutable 장기 캐시라, 파일을 고치면 `index.html`의 `?v=` 쿼리를 올려야 사용자에게 반영된다.**
-- **알려진 버그(직접 확인, Kitsu 서버 쪽 문제)**: `filter[status]=current` 조합에서 특정 페이지(주로 offset=20)가 간헐적으로 앞 페이지와 완전히 동일한 결과를 돌려준다(Kitsu가 응답에 실어주는 `links.next`를 그대로 따라가도 동일 현상 재현됨 — 요청 방식 문제가 아님). `fetchKitsuAllPages`는 이런 중복 페이지를 만나도 페이지네이션을 **중단하지 않고**, 그 페이지의 이미 본 항목만 건너뛴 채 계속 다음 오프셋을 시도한다 — 중단 조건은 `meta.count` 기반의 "더 가져올 데이터가 없음"과 `maxPages` 상한 뿐이다. (과거에 "새 항목이 없는 페이지를 만나면 즉시 중단"하는 방식으로 처리했다가, 이 간헐적 중복 페이지 하나 때문에 뒤에 남은 페이지들을 통째로 못 가져와 결과가 대폭 줄어드는 회귀가 있었다 — 이 히스토리를 참고해 "중단"이 아니라 "건너뛰고 계속"으로 고정할 것.)
-
-### `jikanClient.js` 핵심 로직과 한계
-
-- **재시도**: 429(Rate Limit)뿐 아니라 500/502/503/504(Jikan이 MAL 연결 실패 시 반환하는 게이트웨이 오류)도 재시도 대상. 시도할수록 대기시간 증가. Jikan/MAL 쪽이 통째로 다운되는 경우(과거 실제로 여러 날 지속된 완전 장애가 있었음, Jikan GitHub 이슈 트래커에서 확인 가능)엔 재시도해도 소용없으며, 이 경우 Mock 폴백/에러 메시지로 정상적으로 degrade되는 것이 최선이다 — 재시도 횟수를 늘리는 식으로 "고치려" 하지 말 것.
-- **요일별 방영 애니메이션(`getWeeklyRatings`)**: '인기 랭킹(top)'이 아니라 `/seasons/now`(현재 방영 중인 전체 TV 애니메이션)를 **페이지네이션 전체**에 걸쳐 수집한다(1페이지=25건뿐이라 전체를 안 가져오면 특정 요일이 통째로 빌 수 있음). `mal_id` 기준 중복 제거 후 `anime.airing === true`인 항목만 남기고, 30시간제 관례(`resolveBroadcastSlot`)로 심야(0~5시대) 방영작을 전날 요일로 재배정해 7개 날짜(가장 이른 날짜부터) 섹션에 나눠 담는다. 방송 요일 정보가 없는 항목은 `unscheduled`로 별도 분리(숨기지 않음). 시청률(%) 대신 MAL 지표(평점/평가 참여자 수/인기도 순위/즐겨찾기 수)만 노출 — 실시간 TV 시청률은 공개 API가 없다.
-  - **원피스·블리치 같은 초장기 연재작은 의도적으로 제외 대상이다**(그 작품의 `season` 값이 훨씬 예전 시즌으로 고정돼 있어 `/seasons/now`에 안 잡힘). 한때 `/top/anime?filter=airing` 결합으로 이를 보완했었으나 요청 수가 늘어 오류가 잦아져 안정성을 위해 되돌렸다 — 이 트레이드오프를 다시 바꾸려면 이 이력을 먼저 참고할 것.
-- **분기 신작(`getNewReleases`)**: 기준 종료일이 속한 시즌(`/seasons/{year}/{season}`)의 TV 애니메이션을 페이지네이션(최대 `NEW_RELEASES_MAX_PAGES`=4페이지)으로 수집해 **분기 전체를 그대로** 반환한다. 예전엔 `aired.from`이 좁은 7일 조회 기간 안에 있는 항목만 필터링했으나, 그 좁은 필터 때문에 API 호출이 성공해도 결과가 0건이 되어 Mock으로 자주 대체되는 문제가 있어 필터를 없앴다. 탭 이름은 '분기 신작'이므로 실제로는 '그 분기 전체 방영작'을 보여준다(UI에도 안내 문구 있음).
-- **검색(`searchAnimeByTitle`)**: `/anime?q=` 사용, 정확히 일치하지 않아도 유사도 기반 결과를 그대로 반환(별도 유사도 계산 없음). API 실패 시 다른 기능과 달리 **Mock 데이터로 대체하지 않고** 명확한 에러 메시지를 반환한다(검색은 특정 검색어에 대한 응답이라 무관한 Mock을 보여주면 오도하게 됨) — 이 원칙은 세 클라이언트 모두 동일하다.
-- **날짜 연산**: 문자열 파싱은 항상 `Date.UTC`/`getUTC*`로 처리한다(`app.js`/다른 두 클라이언트도 동일 원칙). `new Date('YYYY-MM-DD')` + 로컬 getter 조합은 방문자 브라우저 타임존에 따라 하루 밀리는 버그를 낸 적이 있음 — 새 날짜 로직 추가 시 이 패턴을 반복하지 말 것.
-- **Mock 폴백**: 이 클라이언트 자체가 실패했을 때만 사용(요일별/신작). 다른 소스로 자동 전환되지 않는다. Mock 데이터의 공식 사이트/커버 이미지 링크는 실제 존재를 확인한 URL만 사용한다(가짜 도메인 금지).
-
-### 요일별 방영 목록의 날짜 기준(AniList `getWeeklyRatings`)
-
-- **기준 날짜를 바꾸면 그 주(기준 날짜 포함 7일)에 실제 방송된 TV 작품**을 보여준다. AniList `Page.airingSchedules(airingAt_greater, airingAt_lesser)`로 그 7일(JST) 안의 방송 일정을 받아 `format === 'TV'`만 남기고(Hentai·중국 제외), 작품별 그 주의 첫 방송 시각으로 방영 요일/시간을 계산한다(`nextAiringEpisode` 자리에 넣어 기존 매핑 재사용). 주당 약 3페이지(요청 3번), 주별 결과는 `weeklyScheduleCache`에 캐시한다.
-- **과거에는 `status: RELEASING`(지금 방영 중)만 받아서 두 가지 문제가 있었다**: ① 기준 날짜를 바꿔도 같은 목록(요일 배치만 달라짐)이 나왔다, ② 마지막 화를 방송한 작품은 AniList 상태가 바로 `FINISHED`가 되어 **그 주 목록에서 사라졌다**(예: BLEACH 禍進譚은 2026-10-27 최종화 방송 직후 사라짐). 지금은 최종화가 방송된 주에도 포함되고 상태 점이 빨강("이번 주 방송 후 방영 종료")이다.
-- 선택한 주가 **오늘 이후까지 걸치면** 방송 일정이 없는 장수 방송(짱구·사자에상 등)도 있으므로 `RELEASING` 목록을 합친다(중복 제거). 완전히 지난 주에는 일정이 등록된 작품만 나온다(예: 2026-07-01 주 37건, 지난주 65건, 이번 주 72건). AniList에 일정이 없는 작품은 지난 주 조회에서 빠진다.
-- **평점·인기도·즐겨찾기는 조회 시점의 현재 값**이다(지난 시점 값 아님). 지난 주 상태 점은 "선택한 주에 방송됨"(초록)이다.
-- Syoboi 방송사 보충은 주 종료일이 14일 이내일 때만 한다(`SYOBOI_FRESH_DAYS`; 그보다 오래된 주는 현재 편성표와 맞지 않아 쓰지 않음).
-- **Kitsu/Jikan은 날짜 조건을 지원하지 않고 항상 "지금 방영 중" 목록**이다. 오늘이 포함되지 않은 주를 고르면 `updatePeriodDisplay`가 "이 데이터 소스는 지난 날짜를 지원하지 않아…" 안내를 붙인다. 분기 신작(TV) 탭은 원래 기준 날짜가 속한 분기(시즌) 전체를 보여준다.
-
-### 분기 신작 (ONA 등) 탭(`getNonTvSeasonal` / `onaApp.js`)
-
-- 기존 "분기 신작 애니메이션" 탭은 이름이 **"분기 신작 애니메이션 (TV 방영)"** 이며 세 소스 모두 TV 형태(format TV)만 받는다. 요일별 방영 탭도 TV만이다. 이 새 탭은 **format이 TV가 아닌 모든 작품**(ONA/OVA/극장판/스페셜/뮤직/TV 숏)이 대상이다(AniList `format_not: TV`).
-- **AniList 전용이다** — 위의 데이터 소스 버튼(AniList/Kitsu/Jikan)과 무관하게 항상 AniList를 쓴다(탭 안내 "?"에도 적음). Kitsu/Jikan으로 확장하려면 각 API의 subtype/filter별로 따로 조회해야 한다.
-- 표는 요일별 방영 표와 같은 칸에서 **방영일·방송 시간을 빼고 형태·시즌을 더한** 것이다(방송사, 평점 그래프 hover, 방영 상태 점, 정렬은 그대로). 방영 상태 점은 AniList `status`로 판정하고 방영 전(`NOT_YET_RELEASED`)은 회색이다. 정렬은 헤더 클릭 + 정렬 기준 select(평점/인기도 순위/참여자 수/즐겨찾기/방영 시작일)이며 기본은 평점 높은 순이다. 형태 필터도 다중 선택이다(요청 외 추가).
-- **연도·시즌 다중 선택 + "조회" 버튼**: 조합(연도×시즌)마다 AniList를 호출하므로 선택만으로는 요청하지 않고 "조회"를 눌러야 적용된다(8조합 이상이면 오래 걸린다고 안내). 한 조합은 대개 50~100건(요청 1~2번), 조합별 결과는 `nonTvSeasonCache`에 캐시하고 실패는 캐시하지 않는다. 일부 조합만 실패하면 나머지는 보여주고 요약에 실패 조합을 적는다. 인기도 순위는 **그때 불러온 작품 전체 안에서**의 순위다(`assignPopularityRanks`).
-- **처음 열 때(탭 클릭) 오늘이 속한 시즌 하나만** 자동으로 불러온다(AniList 요청 한도를 아끼려고 탭을 열기 전에는 부르지 않음). 시즌은 일본 방송 분기(겨울 1~3월/봄 4~6월/여름 7~9월/가을 10~12월, `resolveSeason`과 같은 기준)이다. 연도 목록은 내년~2000년.
-- **Hentai 장르 작품은 제외한다**(요청): AniList 목록 쿼리(요일별, 분기 신작 TV, ONA 등, 만화·소설 순위)에 서버 쪽 `genre_not_in: ["Hentai"]`(`EXCLUDED_GENRES_GQL`)를 건다. 직접 확인: ONA 등 탭에는 Hentai 작품이 시즌당 10~17건 섞여 있었고(2026 가을 55건 중 11건) TV/만화 목록에는 없었다. **사용자가 직접 입력하는 검색 탭은 거르지 않는다.** Kitsu/Jikan 목록에는 적용하지 않았다(ONA 탭이 AniList 전용이고 그쪽 TV 목록엔 해당 작품이 없었음).
-- **중국 제작 작품은 제외한다**(`EXCLUDED_ORIGIN_COUNTRIES = {'CN'}`, 요청). AniList에는 제작국 제외 필터가 없어 `countryOfOrigin`을 받아 클라이언트에서 거른다. 직접 확인: 인기 있는 중국 작품(donghua)은 AniList에 `season`/`seasonYear`가 비어 있어 시즌 조회에는 원래 잡히지 않고(5개 시즌 표본에 CN 0건), 요일별 TV 표본 72건도 전부 JP다. 한국(KR) 등 다른 국가는 제외하지 않는다.
-
-### 만화·소설 순위(`getBookRanking` / `booksApp.js`) 핵심 로직과 한계
-
-- 목적: 아직 애니화되지 않은 인기 원작(IP) 발굴. 일본 원작(`countryOfOrigin: JP`)의 `format: MANGA`(만화)/`NOVEL`(라이트노벨)을 AniList 지표로 보여준다. **인기도(`popularity`)는 AniList 이용자의 목록 등록 수이지 일본 서점 판매량이 아니다** — 판매 부수/순위는 이 API로 알 수 없다(오리콘은 공개 API가 없고 데이터 전재가 금지돼 있어 데이터를 가져오지 않는다. 필요하면 링크만 건다).
-- 순위 기준(`BOOK_SORTS`): 인기도순(`POPULARITY_DESC`), 급상승순(`TRENDING_DESC`), 평점순(`SCORE_DESC` + 최소 인기도 1만), 최근 3년 내 시작작 인기순(`startDate_greater` + `POPULARITY_DESC`). `START_DATE_DESC` 정렬은 월/일이 빈 날짜·미래 작품이 섞여 순서가 엉망이라 쓰지 않는다(직접 확인). 정렬 기준당 최대 200건(50건×4페이지)이며, 요청 간격 큐 때문에 처음 받는 데 약 9초 걸린다. `(종류|기준)`별로 결과를 캐시하고 실패는 캐시하지 않는다.
-- **AniList는 값이 `null`인 필터 변수를 거부한다**(`Illegal operator and value combination`) — `popularity_greater`/`startDate_greater`는 필요할 때만 변수에 넣는다. 항상 `status_not: NOT_YET_RELEASED`로 발표 전 작품을 뺀다.
-- 애니화 상태(`resolveAdaptationState`): `relations`에서 `relationType(version: 2) === 'ADAPTATION'`이면서 노드 `type === 'ANIME'`인 항목의 상태를 요약한다(우선순위: 방영 중 > 제작 예정 > 방영 완료 > 중단, 없으면 `none` = 미애니화). **AniList에 없는 실사 드라마·영화·게임화는 반영되지 않으므로 '미애니화'가 진짜 미각색을 뜻하지는 않는다.** **필터와 정렬은 전부 브라우저에서 이미 받은 200건에 적용하며 AniList를 다시 호출하지 않는다**(`booksApp.js`의 `applyFilters`/`applySorts`/`renderView`). 서버에 요청하는 것은 "조회 기준"(`bookSortSelect`)과 종류(만화/노벨)뿐이다. 필터: 애니화 상태·연재 상태 **다중 선택**(`MultiSelect`, `state.adaptation`/`state.status`는 `Set`; 연재 상태 값은 `item.status` 한국어 문구와 정확히 일치: 연재 중/완결/휴재/중단), 인기도/평점/즐겨찾기/급상승 최소값(값이 없는 작품은 최소값 조건에서 제외). 정렬: 1~3차 select + 방향 버튼(`state.sorts`)과 숫자 칸 머리글 클릭(1차 정렬 지정/방향 전환, 나머지 단계는 유지)이 같은 상태를 공유한다. 값이 없는 작품은 방향과 무관하게 뒤로 보내고, 모두 같으면 조회 기준 순위(`rank`)로 정한다. 애니화 정렬은 `ADAPTATION_ORDER`(미애니화→제작 예정→방영 중→방영 완료→중단) 숫자로 비교하므로 오름차순이 IP 후보 우선이다. 순위 번호는 필터·정렬 전(조회 기준) 순위다. 숫자 입력은 250ms 디바운스하되 **타이머를 입력 칸마다 따로 둬야 한다**(공유하면 다른 칸의 대기 입력이 취소되는 버그가 있었다).
-- 만화/라이트노벨 **탭 이름**에는 출처와 연동 상태가 붙는다(`updateTabLabel`: `만화 (AniList API 실시간 연동됨)`, 불러오는 중/조회 실패도 표시). 소설가가 되자·카쿠요무 탭(빌드 때 받은 스냅샷 데이터)과 구분하기 위함이며, 상태는 그 탭의 조회 결과를 따라 아직 한 번도 안 연 탭은 `(AniList API)`로만 보인다. 응답이 버려지는 경우(로딩 중 다른 탭으로 이동)에도 그 탭의 "불러오는 중"은 풀어 준다.
-- 만화·소설 화면은 처음 열 때 한 번만 불러온다(AniList 분당 약 30회 한도를 아끼기 위함). Mock 데이터는 쓰지 않는다 — 순위에 가짜 데이터를 보여주면 오도하므로 실패하면 에러 문구만 보여준다.
-- 라이트노벨은 AniList에서 `type: MANGA`, `format: NOVEL`이다. 작가는 `staff` 상위 2명, 권수(`volumes`)는 연재 중 작품이 대부분 비어 있어 표에 넣지 않았다.
-
-### 웹소설 랭킹(소설가가 되자 / 카쿠요무) 핵심 로직과 한계
-
-- 두 사이트 모두 **브라우저에서 직접 부를 수 없다**(CORS 헤더 없음) → Syoboi와 같은 방식으로 `npm run build:webnovel`(= `scripts/build-webnovel.js`)이 빌드 때 받아 `public/webnovel-ranking.js`로 저장한다. 배포 빌드(`npm run build`)가 `build-syoboi.js --soft && build-webnovel.js --soft`를 돌리고 주 1회 Deploy Hook 재배포(`.github/workflows/refresh-syoboi.yml`)가 이 스냅샷도 갱신한다. `--soft`는 일부/전체 실패해도 빌드를 실패시키지 않고 실패한 부분은 저장소의 기존 데이터를 유지한다. 이 파일은 `window.WEBNOVEL_RANKING = {...}`를 대입하는 JS이며 `<script src>`로 읽는다(fetch는 `file://`에서 막힘) — `index.html`에서 `?v=`/immutable 캐시를 붙이지 않는다.
-- **소설가가 되자**: 공식 API(`https://api.syosetu.com/novelapi/api/`, 키 불필요, 문서 https://dev.syosetu.com/man/api/). 주간은 `order=weeklypoint`, 월간은 `monthlypoint`, `lim=300`. 포인트는 `북마크×2 + 평가점수`이며 기간 포인트는 최근 7/30일간 늘어난 값. **서적화 여부 필드가 없어** 제목·키워드의 `書籍化/コミカライズ/アニメ化`로 추정(`detectMediaMix`). `end=0`이면 완결(단편은 `noveltype=2`), `isstop=1`이면 휴재. 공식 문서가 결과를 길어도 2주 안에 갱신하라고 요청해 14일이 넘으면 화면에 "오래됨"을 표시한다. R18은 이 API에 없다(별도 API). 공식 "이용 가이드라인" 페이지는 읽지 못했다.
-- **카쿠요무**: 공식 API가 없어 공개 랭킹 페이지(`/rankings/all/{weekly|monthly}?work_variation=long&page=N`, 한 페이지 100건 → 3페이지 = 300건)가 Next.js로 심어 둔 `__NEXT_DATA__`의 Apollo 상태(`ROOT_QUERY.rankedWorks(...)`의 `nodes` → `Work:{id}`)를 읽는다. **개인 확인용으로만 쓴다**(이용규약에 크롤링 금지 조항은 없으나 사적 이용 범위를 넘는 복제·영리 목적 이용 금지 조항이 있어 업무용으로 쓰려면 KADOKAWA에 문의가 필요하다 — 사용자가 개인 확인용이라고 밝혔고 문의하지 않기로 함). 요청은 기간당 3회·1.5초 간격으로 최소화하고, 소개문·캐치프레이즈 같은 본문은 저장하지 않는다(제목/작가/장르/태그/수치만). 기간별 포인트는 없고 순위와 누적 별점(`totalReviewPoint`)만 있다. `hasPublication`이 서적화 표시다. 사이트 구조가 바뀌면 깨지므로(`__NEXT_DATA__`/`rankedWorks`를 못 찾으면 명확한 오류) 수집 실패 시 기존 데이터가 유지된다. 카쿠요무 genre enum의 한국어 매핑(`KAKUYOMU_GENRES`)은 알려진 값만 있고 모르는 값은 원문 그대로 보여준다.
-- 화면(`webNovelApp.js`): 기간(주간/월간), 필터(장르·상태는 다중 선택, 서적화 표기 없는 작품만·검색·최소 포인트), 1~3차 정렬 + 머리글 클릭 정렬은 만화·소설 화면(`booksApp.js`)과 같은 방식이며 전부 브라우저에서 300건에 적용한다(재요청 없음). 도구줄은 JS로 만든다. 카쿠요무에는 기간 포인트/북마크/리뷰/이세계 칸과 정렬 항목이 없다. 두 사이트의 포인트는 의미가 달라(소설가가 되자: 북마크×2+평가, 카쿠요무: 누적 별점) 서로 직접 비교하지 말 것. 일본 서점 판매량이 아니라 투고 사이트 안의 인기다.
-- 알파폴리스·에브리스타·하멜른·pixiv 소설은 공식 API가 없거나(알파폴리스·pixiv) 자동 접속을 막고(하멜른 Cloudflare 봇 차단, 에브리스타 robots.txt) 있어 지원하지 않는다.
-
-## UI 규칙
-
-- **표 영역(`.table-wrapper`)은 높이를 `calc(100vh - 100px)`로 제한하고 표 안에서 세로·가로로 스크롤한다**(`overflow: auto`). 긴 표에서 가로 스크롤바가 표 맨 아래(=페이지 맨 아래)에 생겨 가로로 움직이려고 페이지 끝까지 내려가야 하던 문제 때문이며, 이렇게 하면 가로 스크롤바가 지금 보이는 화면 하단에 놓인다. 대신 표 안에 세로 스크롤바가 생기므로 머리글(`thead th`)을 `position: sticky; top: 0`으로 고정했다(고정 컬럼 머리글은 `z-index: 3`, `top: 0`). 모든 표(요일별/분기 신작/ONA 등/만화·소설/웹소설)가 이 클래스를 공유한다.
-- **표 드래그 이동**(`public/tablePan.js`): `.table-wrapper` 안의 셀을 마우스로 잡고 끌면 좌우·상하로 이동한다(이벤트 위임이라 동적으로 만든 표도 적용). 5px 미만 움직임은 클릭으로 둬서 머리글 정렬 등이 그대로 동작하고, 실제로 끈 뒤의 click은 막는다. 링크/버튼/입력/커버 이미지와 **타이틀 칸(`.title-scroll`)은 이동 대상에서 제외**한다(텍스트를 드래그해 선택·복사해야 하므로) — 그 외 칸에서는 드래그가 텍스트 선택 대신 이동이다. 스크롤바(래퍼 자체)를 누르는 동작은 건드리지 않는다. 가로 휠/트랙패드/Shift+휠은 브라우저 기본 동작이다.
-
-- **데이터 소스 선택**(`index.html`의 `.source-panel`, `app.js`의 `CLIENT_GETTERS`/`activeSource`): AniList/Kitsu/Jikan 세 버튼 중 하나를 사용자가 직접 고른다(기본값 AniList). 버튼을 누르면 `fetchAnimeData`가 그 소스로 요일별/신작 데이터를 다시 불러온다(검색은 다음 검색 시점에 새 소스를 사용). 페이지 최초 진입 시 `checkAllSourceStatus()`가 세 API에 재시도 없이 1회씩 진단 요청을 보내 버튼 옆 점(`.source-btn-dot`)을 초록(정상)/빨강(실패)으로 표시한다 — 화면에 표시 중인 데이터는 건드리지 않는 순수 진단이며, 각 클라이언트의 `checkStatus()`가 이 역할을 한다. (과거에 있던 "Jikan API 상태 확인" 전용 패널은 이 버튼 옆 점으로 대체되며 제거됐다.) "데이터 소스" 제목 옆에도 "?" 안내 버튼(`sourceInfoBtn`/`sourceInfoPopup`)이 있다.
-- **요일별 방영 탭은 요일별로 표를 나누지 않는다** — 과거에는 요일마다 별도 `<table>`(day-block)을 그렸지만, 지금은 `renderRatingDays`가 `days.flatMap((day) => day.items).concat(unscheduled)`로 전체 항목(요일 미상 포함)을 하나로 합쳐 **단일 표**로 그린다. 요일 구분은 표 안의 "방영일" 컬럼(`item.broadcastDayKorean`, 일/월/화/수/목/금/토 한 글자 — 요일 미상은 "정보 없음")이 대신한다. 정렬 기준(평점/인기도 순위/평가 참여자 수/즐겨찾기 수/방영일) + 오름차순/내림차순 토글 하나로 표 전체를 재정렬하며, 기본 정렬은 **평점 높은 순**(`ratingSort = { field: 'score', direction: 'desc' }`)이다. "평점"/"인기도 순위"/"방영일" 컬럼 헤더도 직접 클릭해 정렬할 수 있다(`RATING_SORTABLE_HEADERS`, `handleHeaderSortClick`) — 같은 헤더를 다시 클릭하면 방향만 뒤집고, 다른 헤더를 클릭하면 그 필드의 기본 방향으로 시작하며, 상단 드롭다운(`sortFieldSelect`)과 항상 같은 `ratingSort` 상태를 공유해 서로 동기화된다. 방영일 정렬은 문자열이 아니라 `BROADCAST_DAY_ORDER`(일=0~토=6) 숫자로 변환해 비교한다(`getSortValue`) — 다른 필드처럼 `sortItems`에서 단순 뺄셈으로 비교할 수 없기 때문.
-- **커버 이미지**: 요일별 표/신작 표/검색 카드 모두 `createCoverCell`(표) 또는 인라인 `<img>`(카드)로 작은 축소본(`.cover-thumb`)을 보여주고, 클릭하면 `openImageModal(src, alt)`가 원본을 전체 화면 오버레이(`#imageModal`)에 띄운다. 오버레이 자체에 클릭 리스너 하나만 달아뒀다(`imageModal.addEventListener('click', closeImageModal)`) — 이미지가 오버레이의 자식이라 이미지를 클릭해도 이벤트가 버블링돼 같이 닫힌다(이미지 클릭/바깥 클릭 모두 닫힘 요구사항을 리스너 하나로 충족). **주의**: `.image-modal{display:flex}`와 `.hidden{display:none}`은 둘 다 단일 클래스 선택자라 명시도가 같은데, `.image-modal`이 스타일시트에서 더 나중에 정의돼 있으면 hidden 클래스를 붙여도 안 감춰지는 버그가 실제로 있었다(전체 화면이 투명하게 클릭을 가로채 다른 버튼이 전부 안 눌리는 심각한 회귀). 지금은 `.image-modal.hidden { display: none; }` 규칙으로 명시도를 높여 고정했다 — `.hidden`과 같이 쓰이는 새 컴포넌트에 자체 `display` 규칙을 추가할 때는 이 패턴(두 클래스를 모두 요구하는 override 규칙 추가)을 따를 것.
-- 길게 항상 펼쳐 보여줄 필요 없는 안내 문구는 제목 옆 "?" 아이콘 버튼(`.info-btn`) + 클릭 시 뜨는 미니 팝업(`.info-popup`, `.info-wrapper`로 감싸 `position:relative`/`absolute` 앵커링)으로 접어둔다. 버튼 클릭으로 토글, 팝업 바깥 클릭으로 닫힘 — 이 토글+바깥클릭닫힘 로직은 `app.js`의 `setupInfoPopup(btn, popup)` 헬퍼 하나로 통일돼 있다(`event.stopPropagation()`으로 버튼 자체 클릭과 충돌 방지). 요일별 방영 탭의 안내(`ratingInfoBtn`/`ratingInfoPopup`)와 데이터 소스 패널의 안내(`sourceInfoBtn`/`sourceInfoPopup`)가 이 패턴의 예시이니, 다른 곳에 긴 안내문을 추가할 때는 새 "?" 버튼/팝업 엘리먼트만 만들고 `setupInfoPopup(...)`을 한 줄 추가하면 된다.
-- 요일별 방영 탭은 단일 `<table>`로 전체 항목을 그리며, 컬럼 너비는 전체 항목(요일 미상 포함) 중 가장 긴 값을 기준으로 한 번만 계산(`computeRatingColumnWidths`, canvas `measureText` 사용)해 `<colgroup>`으로 적용한다(`public/app.js`). 커버 이미지 컬럼처럼 텍스트가 아닌 컬럼은 `column.fixedWidth`로 고정폭을 지정해 텍스트 측정을 건너뛴다.
-- **타이틀(일본어/영어) 컬럼**은 내용 길이로 폭을 재지 않는다 — 제목이 길면 표 전체가 넓어져 페이지에 불필요한 가로 스크롤이 생기던 문제가 있어서, `getTitleColumnWidth()`(일본어 20자 기준 샘플 `TITLE_COLUMN_SAMPLE`을 재서 캐시한 값 하나)를 두 컬럼(`column.titleColumn: true`)에 **동일하게** 적용한다(둘 중 하나만 바꾸면 두 칸 크기/간격이 달라 보이므로 항상 같이 바꿀 것). 실제 셀은 `createTitleCell(text, contentWidth)`이 만드는 `.title-scroll`(내부 `overflow-x:auto`, 인라인 `max-width`) 안에 담기는데, **스크롤바 자체는 화면에 보이지 않도록 숨겨뒀다**(`scrollbar-width:none`/`::-webkit-scrollbar{display:none}`) — 넘치는 텍스트는 그냥 잘려 보이고, `overflow-x:auto`는 계속 살아있어서 마우스로 텍스트를 드래그해 선택(복사)할 때 브라우저가 자동으로 옆으로 스크롤해주는 것까지는 막지 않는다. 셀 하나만 스크롤되고 표/페이지 전체 폭에는 영향을 주지 않는다(전체 텍스트는 `title` 속성 툴팁으로도 볼 수 있음). `getTitleColumnWidth()`는 요일별 표뿐 아니라 **신작 탭의 "타이틀" 컬럼에서도 그대로 재사용**한다(`renderNewReleasesTable`) — 두 탭의 타이틀 칸 크기 규칙을 항상 일치시키기 위함이므로, 한쪽만 고치지 말 것.
-- **좁은 화면에서 표에 좌우 스크롤이 생겨도 No./표지/타이틀(일본어) 세 칸(`STICKY_COLUMN_COUNT`)은 화면에 고정**되고 타이틀(영어)부터는 그 뒤로 스크롤된다(`applyStickyColumns`가 `columnWidths`로 각 칸의 누적 `left` 오프셋을 계산해 `.sticky-col` 클래스 + 인라인 `left`를 적용, CSS는 `position: sticky`와 배경색/그림자만 담당). 스크롤 중에도 어떤 작품 행인지 계속 보이게 하려는 목적이며, 이 고정 컬럼 동작은 요일별 방영 탭에만 있고(**신작 탭에는 적용하지 않음** — 신작 탭은 타이틀 크기 규칙만 공유), 컬럼을 추가/재배치할 때 `RATING_COLUMNS`/`RATING_SORTABLE_HEADERS`/`createRatingRow`의 셀 순서가 어긋나면 sticky 오프셋도 같이 깨지므로 세 곳의 순서를 항상 맞출 것.
-- 타이틀은 항상 일본어/영어를 별도 컬럼(또는 카드 필드)으로 분리해서 보여준다.
-- **분기 신작 탭은 방송일(`firstAirDate`)이 빠른 순으로 기본 정렬된다** — 클라이언트가 반환하는 순서(인기순 등)를 그대로 쓰지 않고, `renderNewReleasesTable`이 `sortReleasesByAirDate`로 항상 재정렬한 뒤 그린다. `firstAirDate`는 `'YYYY-MM-DD'` 문자열이거나(세 클라이언트 공통) 날짜를 모르면 `'미정'` 같은 문자열이므로, 정규식으로 형식을 확인해 유효한 날짜만 문자열 비교로 정렬하고 나머지는 다른 정렬 기준의 null 처리와 동일하게 맨 뒤로 보낸다(`getAirDateSortValue`). 신작 탭에는 별도 정렬 UI가 없다(요일별 탭과 달리 항상 이 기본 정렬 하나만 적용).
-- 값이 없는 지표/필드는 항목 자체를 숨기지 말고 "정보 없음"으로 표시한다(과거에 지표 하나가 없다고 방영 중인 작품 전체가 목록에서 빠지는 버그가 있었음).
-- 각 탭 제목 옆 배지(`ratingSourceStatus`/`newSourceStatus`/`searchSourceStatus`)로 실시간 연동(초록)/Mock 대체(주황)/오류(빨강)를 표시한다(`updateSourceStatus`, `source` 값 `'anilist'|'kitsu'|'jikan'|'mock'|'error'`) — 사용자가 지금 보는 데이터가 실시간인지, 예시인지 구분할 수 있게 하기 위함이니 새 데이터 소스를 추가해도 이 배지 갱신을 빠뜨리지 말 것.
+세 클라이언트 모두 요일별/신작/검색 항목에 `category`, `genres`, `themes`(최대 5개), `coverImage`, `airingState`, `firstAirDate` 등을 채운다(값이 없으면 `null`/빈 배열/`'정보 없음'`). 소스별 매핑 차이는 각 `rules/*.md` 참고.
